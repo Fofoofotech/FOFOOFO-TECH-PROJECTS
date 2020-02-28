@@ -1,0 +1,222 @@
+<?php
+/**
+ * 
+ * @author jonathanboye
+ * data :{"TRANS_COMPCODE":"0003","TRANS_BRANCH_CODE":"BR-0000005","TRANS_CLIENT_NUM":"TAN003","TRANS_CLIENT_CODE":"CLNT0000017354","TRANS_AGENT_CODE":"AG62","TRANS_EXPECTED_AMT":40,"TRANS_AMOUNT":40,"PAYMENT_METHOD":"PM_C0002|Cheque","TRANS_GEOLATITUDE":5.6287632,"TRANS_GEOLONGITUDE":-0.2368514,"CHEQUE_DETAILS":{"CHEQUE_NUMBER":"188848383","BANK_NAME":"ARB APEX BANK","BANK_BRANCH":"Achimota"}}
+ * 
+ */
+
+class savetransaction extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine = new engineClass();
+        $smartsms = new SmartSMSClass();
+        $time = date('Y-m-d H:i:s');
+        
+        
+        if (!empty($this->data)){
+            $transactions = json_decode($this->data);
+            
+            $firstpay_date = $transactions->FIRSTPAY_DATE;
+            $slipdate = explode("-", $firstpay_date);
+            $tmonth = $slipdate[1];
+            $tyear = $slipdate[0];
+            $last_paydate = $tyear.'-'.$tmonth.'-01';
+            $pp = date("Y-m-01",strtotime(date("Y-m-01", strtotime($last_paydate)) . " -1 month"));
+
+            $slipp = explode("-", $pp);
+
+            $last_paydate = $slipp[0].'-'.$slipp[1].'-01';
+            $transact_valid = true;
+            
+            
+            //GET CLIENT DETIALS
+            $clientobj = $engine->getClientDetails($transactions->TRANS_CLIENT_NUM,$transactions->TRANS_COMPCODE);
+            $compobj = $engine->getCompanyDetails($transactions->TRANS_COMPCODE);
+            //CHECK IF NEW PAYMENT ON CLIENT
+            if(empty($transactions->FIRSTPAY_DATE)){
+               
+                //FIND LAST PAYDATE
+                if(!empty($clientobj->CLNT_LAST_PAID)){
+                    $last_paydate = $clientobj->CLNT_LAST_PAID;
+                }else{
+                    //GET COMPANY SET DATE
+                    
+                    $last_paydate = $compobj->FACI_SETUP_DATE;
+                }
+                
+                $getNextPayDate = strtotime(date("Y-m-01", strtotime($last_paydate)) . " +1 month");
+                $tmonth = date("m",$getNextPayDate);
+                $tyear = date("Y",$getNextPayDate);
+                 
+            }
+           
+            //GET ARREARS MONTHS AND AMOUNT
+            $datetime1 = new DateTime("now");
+            $datetime2 = date_create($last_paydate);
+            $interval = date_diff($datetime1, $datetime2);
+            $month_deff = $interval->format('%m');
+            
+           //GET STORED BALANCE
+            $storedBalance = $engine->getClientBalance($transactions->TRANS_CLIENT_NUM,$transactions->TRANS_COMPCODE);
+           
+            $paymentamt = $storedBalance + $transactions->TRANS_AMOUNT;
+            $paymentcode = $engine->monthlyAmount($clientobj->CLNT_PMT_CAT_CODE);
+            $expectedamt = $month_deff*$paymentcode;
+           
+            //GET LAST ENT DATE
+            $paydate_endpoint = round(($paymentamt/$paymentcode), 0, PHP_ROUND_HALF_DOWN);
+            $paydate_enddate = date("Y-m-t",strtotime(date("Y-m-01", strtotime($last_paydate)) . " +{$paydate_endpoint} month"));
+            
+            $allow_anypayment = false;
+            //CHECK FOR BELOW MONTHLY PAYMENT SETTINGS
+            if($paymentamt < $paymentcode && !$allow_anypayment){
+                $transact_valid = false;
+                $err_msg ="Invalid operation: Amount entered can not be less than monthly payment";
+            }
+            //PROCESS PAYMENT
+            $pb = $paymentamt;
+            $payment_schedule = array();
+            //echo $tyear;
+            
+            $pdate = date("Y-m-01", strtotime($tyear.'-'.$tmonth.'-01'));
+           
+            
+            if(!$allow_anypayment && $transact_valid){
+                
+                do{
+                   
+                    $pb = $pb - $paymentcode;
+                   
+                    $pdate = strtotime($pdate);
+                    
+                    $payment_schedule[] = array($paymentcode,date("Y-m-t", $pdate),date("Y",$pdate),date("m",$pdate));
+                    
+                    $pdate = date("Y-m-01",strtotime(date("Y-m-01", $pdate) . " +1 month"));
+                    
+                    
+                }while($pb >= $paymentcode);
+                
+            }else if($transact_valid){
+                do{
+                    $pbset = $pb;
+                    $pb = $pb - $paymentcode;
+                    
+                    $pdate = strtotime($pdate);
+                    
+                    $paymentin = ($pb < 0)? $pbset : $paymentcode;
+                    
+                    $payment_schedule[] = array($paymentin,date("Y-m-t", $pdate),date("Y",$pdate),date("m",$pdate));
+                    
+                    $pdate = date("Y-m-01",strtotime(date("Y-m-01", $pdate) . " +1 month"));
+                    
+                    
+                }while($pb > 0);
+                
+            }
+            
+            $amtbalance = $pb;
+            
+            //print_r($payment_schedule);
+            //echo $amtbalance;
+           //exit;
+            //GET FOR VALIDATED
+            if($transact_valid){
+            $receiptnum = $engine->genReceiptNum($transactions->TRANS_AGENT_CODE,$transactions->TRANS_COMPCODE);
+            $transaction_date = date("Y-m-d");
+            
+            //GENERATE TRANSACTION CODE
+            $transcode = $engine->generateCode('area_transaction',$transactions->TRANS_AGENT_CODE,'TRANS_CODE',$transactions->TRANS_COMPCODE);
+            //GET AGENT NAME
+            $agentobj = $engine->getUserDetails($transactions->TRANS_AGENT_CODE,$transactions->TRANS_COMPCODE);
+            //GENERATE SHORT CODE
+            $shortcode = uniqid();
+           
+            //GET PAYMENT OPTIONS
+            $payment_option = explode("|", $transactions->PAYMENT_METHOD);
+            //GET ZONE NAME
+            $zoneobj = $engine->getAgentZoneName($clientobj->CLNT_ZONE_CODE);
+           
+         
+            
+            
+            $fulldata = array($transcode,$transactions->TRANS_COMPCODE,$transactions->TRANS_AGENT_CODE,$transactions->TRANS_AMOUNT,'1',$transaction_date,$this->token,$tmonth,$tyear,$zoneobj->ZON_BRCODE,$transactions->TRANS_CLIENT_CODE,$transactions->CHEQUE_DETAILS->CHEQUE_NUMBER,$transactions->TRANS_CLIENT_NUM,$clientobj->CLNT_NAME,$agentobj->USR_OTHERNAME.' '.$agentobj->USR_SURNAME,'0','',$shortcode,$transactions->CHEQUE_DETAILS->BANK_NAME,$transactions->CLNT_CONTACT_PERSON,$transactions->CHEQUE_DETAILS->BANK_BRANCH,$time,$transactions->TRANS_GEOLONGITUDE,$transactions->TRANS_GEOLATITUDE,$clientobj->CLNT_ZONE_CODE,$receiptnum,$clientobj->CLNT_PMT_CAT,$clientobj->CLNT_PMT_CAT_CODE,$payment_option[0],$payment_option[1],$expectedamt,$amtbalance,$zoneobj->ZON_NAME,$paydate_enddate,$paymentcode);
+            $header_array = array("TRANS_CODE","TRANS_COMPCODE","TRANS_AGENT_CODE","TRANS_AMOUNT","TRANS_TYPE","TRANS_DATE","TRANS_TOKEN","TRANS_MONTH","TRANS_YEAR","TRANS_BRANCH_CODE","TRANS_CLIENT_CODE","TRANS_DETAILS","TRANS_CLIENT_NUM","TRANS_CLIENT_NAME","TRANS_AGENT_NAME","TRANS_STATUS","TRANS_RECALL_AMOUNT","TRANS_SHORTCODE","TRANS_PAYMENT_OPT","TRANS_PHONENO","TRANS_BANK_BRANCH","TRANS_SYNC_DATE","TRANS_GEOLONGITUDE","TRANS_GEOLATITUDE","TRANS_CLIENT_ZONE","TRANS_RECEIPTNUM","TRANS_PMTCATNAME","TRANS_PMTCATCODE","TRANS_PMTMETHCODE","TRANS_PMTMETHNAME","TRANS_EXPECTED_AMT","TRANS_BALANCE_AMT","TRANS_ZONENAME","TRANS_LAST_PAID","TRANS_MONTHLY_EXP");
+            //print_r($payment_option);
+            //print_r($fulldata);
+            
+            
+                 //INSERT INTO TABLE
+            $this->sql->Execute("INSERT INTO area_transaction(TRANS_CODE, TRANS_COMPCODE, TRANS_AGENT_CODE, TRANS_AMOUNT, TRANS_TYPE, TRANS_DATE, TRANS_TOKEN, TRANS_MONTH, TRANS_YEAR, TRANS_BRANCH_CODE, TRANS_CLIENT_CODE, TRANS_DETAILS, TRANS_CLIENT_NUM, TRANS_CLIENT_NAME, TRANS_AGENT_NAME, TRANS_STATUS, TRANS_RECALL_AMOUNT, TRANS_SHORTCODE, TRANS_PAYMENT_OPT, TRANS_PHONENO, TRANS_BANK_BRANCH, TRANS_SYNC_DATE,TRANS_GEOLONGITUDE,TRANS_GEOLATITUDE,TRANS_CLIENT_ZONE,TRANS_RECEIPTNUM,TRANS_PMTCATNAME,TRANS_PMTCATCODE,TRANS_PMTMETHCODE,TRANS_PMTMETHNAME,TRANS_EXPECTED_AMT,TRANS_BALANCE_AMT,TRANS_ZONENAME,TRANS_LAST_PAID,TRANS_MONTHLY_EXP) VALUES(".$this->sql->Param('1').",".$this->sql->Param('2').",".$this->sql->Param('3').",".$this->sql->Param('4').",".$this->sql->Param('5').",".$this->sql->Param('6').",".$this->sql->Param('7').",".$this->sql->Param('8').",".$this->sql->Param('9').",".$this->sql->Param('10').",".$this->sql->Param('11').",".$this->sql->Param('12').",".$this->sql->Param('13').",".$this->sql->Param('14').",".$this->sql->Param('15').",".$this->sql->Param('16').",".$this->sql->Param('17').",".$this->sql->Param('18').",".$this->sql->Param('19').",".$this->sql->Param('20').",".$this->sql->Param('21').",".$this->sql->Param('22').",".$this->sql->Param('22').",".$this->sql->Param('23').",".$this->sql->Param('24').",".$this->sql->Param('25').",".$this->sql->Param('26').",".$this->sql->Param('27').",".$this->sql->Param('28').",".$this->sql->Param('29').",".$this->sql->Param('30').",".$this->sql->Param('31').",".$this->sql->Param('32').",".$this->sql->Param('33').",".$this->sql->Param('34').")",$fulldata);
+            
+            if($this->sql->insert_Id() > 0){
+             //INSERT / REPLACE BALANCE TABLE
+                
+                    $bill_trans_code = $engine->generateCode('area_transaction_balance', 'TRSBAL', 'TRSBAL_CODE',$transactions->TRANS_COMPCODE);
+                    $headerbalance_array = array("TRSBAL_CODE","TRSBAL_AMOUNT","TRSBAL_DATE","TRSBAL_CLIENTCODE","TRSBAL_AG_CODE","TRSBAL_BRANCHCODE","TRSBAL_COMP_CODE","TRSBAL_TXCODE","TRSBAL_CLIENTNUM","TRSBAL_TRANS_RECEIPTNUM");
+                    $fulldatabalance = array($bill_trans_code,$amtbalance,$transaction_date,$transactions->TRANS_CLIENT_CODE,$transactions->TRANS_AGENT_CODE,$zoneobj->ZON_BRCODE,$transactions->TRANS_COMPCODE,$transcode,$transactions->TRANS_CLIENT_NUM,$receiptnum);
+                    $this->sql->Execute("REPLACE INTO area_transaction_balance(TRSBAL_CODE, TRSBAL_AMOUNT, TRSBAL_DATE, TRSBAL_CLIENTCODE, TRSBAL_AG_CODE, TRSBAL_BRANCHCODE, TRSBAL_COMP_CODE, TRSBAL_TXCODE, TRSBAL_CLIENTNUM,TRSBAL_TRANS_RECEIPTNUM) VALUES(".$this->sql->Param('1').",".$this->sql->Param('2').",".$this->sql->Param('3').",".$this->sql->Param('4').",".$this->sql->Param('5').",".$this->sql->Param('6').",".$this->sql->Param('7').",".$this->sql->Param('8').",".$this->sql->Param('9').",".$this->sql->Param('10').")",$fulldatabalance);
+                   
+                    //print $this->sql->ErrorMsg();
+                   
+                
+            //INSERT INTO BILLING TABLE
+            $numcount =1;
+                foreach ($payment_schedule as $billarray){
+                    $autocode = $engine->generateCode("area_client_bill", "CLB", "CLBIL_CODE",$transactions->TRANS_COMPCODE);
+                    $fulldatabill = array($autocode,$transactions->TRANS_COMPCODE,$transactions->TRANS_AGENT_CODE,$billarray[3],$billarray[2],$billarray[0],$billarray[1],$time,$transactions->TRANS_CLIENT_CODE,$clientobj->CLNT_ZONE_CODE,$zoneobj->ZON_BRCODE,'',$transcode,$transactions->TRANS_CLIENT_NUM,$receiptnum,$receiptnum.'-'.$numcount);
+                    //print_r($fulldatabill);
+                    
+                    $this->sql->Execute("INSERT INTO area_client_bill(CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT,CLBIL_BILL_DATE,CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_ACTCODE, CLBIL_TXCODE, CLBIL_CLTNUM,CLBIL_TRANS_RECEIPTNUM,CLBIL_RECEIPTNUMS) VALUES(".$this->sql->Param('1').",".$this->sql->Param('2').",".$this->sql->Param('3').",".$this->sql->Param('4').",".$this->sql->Param('5').",".$this->sql->Param('6').",".$this->sql->Param('7').",".$this->sql->Param('8').",".$this->sql->Param('9').",".$this->sql->Param('10').",".$this->sql->Param('11').",".$this->sql->Param('12').",".$this->sql->Param('13').",".$this->sql->Param('14').",".$this->sql->Param('15').",".$this->sql->Param('16').")",$fulldatabill);
+                    //print $this->sql->ErrorMsg();
+                    $numcount++;
+                }
+            
+            //UPDATE CLIENT LAST PAYDATE
+                $this->sql->Execute("UPDATE area_clients SET CLNT_LAST_PAID = ".$this->sql->Param('1')." WHERE CLNT_NUM = ".$this->sql->Param('2')."",array($paydate_enddate,$transactions->TRANS_CLIENT_NUM));
+                //print $this->sql->ErrorMsg();
+           //SEND SMS
+                $sms_result = $engine->sendTransactionSMS($compobj->FACI_NAME,$transactions->TRANS_COMPCODE,$transactions->CLNT_CONTACT_PERSON,'+233',$clientobj->CLNT_CATEGORY_CODE,$transactions->TRANS_CLIENT_NUM,$transactions->TRANS_AMOUNT,$transaction_date,$compobj->FACI_PHONENUM,$shortcode,$compobj->FACI_SMS_KEYWORD);
+               //$sms_result =0;
+                if($sms_result){
+                       $sendmy = $smartsms->sendSMSNEW($sms_result[0], $sms_result[1], $sms_result[2]);
+                        
+                        if (preg_match('/Success/i', $sendmy) == true) {
+                            //  Deduct sms cost from sms balance if sms is sent
+                            $engine->getSMSDeduction($companycode, $messagecost);
+                            }
+                
+                }
+                
+                
+                $c = array_combine($header_array, $fulldata);
+                $b = array_combine($headerbalance_array, $fulldatabalance);
+                
+                //STORE LOG
+                $eventype = '059';
+                $activity = 'Transaction Synchronization: Transaction => '.serialize($c).' | Balance => '.serialize($b);
+                $engine->setEventLog($eventype,$transactions->TRANS_AGENT_CODE, $agentobj->USR_OTHERNAME.' '.$agentobj->USR_SURNAME, $activity,$transactions->TRANS_COMPCODE);
+                
+                $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','tran_result'=>$c,'balance_result'=>$b),200);
+                
+            }else{
+                $this->response(array('data'=>'error','msg'=>$this->sql->ErrorMsg()),404);
+            }
+            }else{
+                $this->response(array('data'=>'error','msg'=>$err_msg),404);
+            }
+        }else{
+          $this->response(array('data'=>'error','msg'=>$this->sql->ErrorMsg()),404);
+        }
+        
+    }
+    
+}
+
+?>

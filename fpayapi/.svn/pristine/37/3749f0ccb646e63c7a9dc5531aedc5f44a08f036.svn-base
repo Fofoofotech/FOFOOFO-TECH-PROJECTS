@@ -1,0 +1,33 @@
+<?php
+
+class recalltransaction extends REST
+{
+  function __construct(){
+        parent::__construct();
+        global$sql;
+        $this->sql=$sql;
+    }
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+
+        if(!empty($this->companycode)&&!empty($this->agentcode)){
+            $stmt = $sql->Execute($sql->Prepare("SELECT TRANS_RECEIPTNUM FROM area_transaction WHERE TRANS_COMPCODE = ".$sql->Param('a')." AND TRANS_AGENT_CODE = ".$sql->Param('b')." AND TRANS_STATUS = ".$sql->Param('c')." "),array($this->companycode,$this->agentcode,'4'));
+
+            if ($stmt->RecordCount() > 0){
+                $obj_array = [];
+                while ($obj = $stmt->FetchNextObject()) {
+                    $obj_array[] = "'".$obj->TRANS_RECEIPTNUM."'";
+                }
+                $imp = '('.implode(',',$obj_array).')';
+                $this->response( array( 'data'=>'true','msg'=>'Success','receiptnumber'=>$imp,'status'=>200),200);
+            }else{
+                $this->response(array('data'=>'error','status'=>405,'msg'=>'No Record found!. '.$sql->ErrorMsg()),404);
+            }
+        }else{
+            $this->response(array('data'=>'error','status'=>504,'msg'=>'Company Code or Agent Code empty.'),404);
+        }
+    }
+}
+
+?>

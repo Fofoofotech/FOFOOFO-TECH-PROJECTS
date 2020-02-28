@@ -1,0 +1,203 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/20/2018
+ * Time: 11:15 AM
+ */
+class getdb extends REST
+{
+
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+
+        $this->table_agent = ['area_agent_connect'=>'USR_CODE','area_agents'=>'AG_CODE','area_agentzones'=>'AGZ_AGCODE','area_client_bill'=>'CLBIL_AGCODE','area_transaction'=>'TRANS_AGENT_CODE','area_transaction_balance'=>'TRSBAL_AG_CODE'];
+
+        $this->table_zones = ['area_clients'=>'CLNT_ZONE_CODE','area_agentzones'=>'AGZ_ZONECODE','area_client_bill'=>'CLBIL_ZONE_CODE','area_transaction'=>'TRANS_CLIENT_ZONE'];
+        $this->exceptional_tables =['area_currency','area_district','area_discounts','area_region','area_bank','area_payment_methods'];
+
+    }
+
+
+    function Init(){
+        $sql=$this->sql;
+
+
+        //GET REQUEST TYPE FOR ZONE
+        $insert_query="";
+
+        if(!empty($this->table_zones[$this->tablename])){
+
+            $agentzones = $this->getAgentZones();
+            $agentzone_string ='';
+
+            //if(count($agentzones) > 0){
+
+            foreach ($agentzones as $mobj){
+
+                $agentzone_string .= "'".$mobj["AGZ_ZONECODE"]."',";
+            }
+            $agentzone_string = substr($agentzone_string,0,-1);
+
+
+            $insert_query="  AND ".$this->table_zones[$this->tablename]." IN (".$agentzone_string.")  ";
+            //}else{
+            //    $insert_query="  AND ".$this->table_zones[$this->tablename]." IN ('0')  ";
+            //}
+
+        }
+        //GET REQUEST TYPE FOR AGENT
+        if(!empty($this->table_agent[$this->tablename])){
+            $insert_query .="  AND ".$this->table_agent[$this->tablename]." = '".$this->agentcode."'  ";
+        }
+
+
+        if (!empty($this->column)){
+
+            if(!empty($this->date)){
+
+                $stmt = $sql->Execute($sql->Prepare("SELECT ". $this->columns ." FROM ".$this->tablename." WHERE ".$this->column." = ".$sql->Param('a')." ".$insert_query." AND SYNC_DATE > ".$sql->Param('a')." "),array($this->companycode,$this->date)) ;
+                //print $sql->ErrorMsg();
+                //print_r($stmt);
+                //exit;
+            }else{
+
+                $stmt = $sql->Execute($sql->Prepare("SELECT ". $this->columns ." FROM ".$this->tablename." WHERE ".$this->column." = ".$sql->Param('a')." ".$insert_query." "),array($this->companycode)) ;
+            }
+
+
+        }else{
+
+            if(in_array($this->tablename,$this->exceptional_tables)){
+                if (!empty($this->date)){
+                    $stmt = $sql->Execute($sql->Prepare("SELECT ". $this->columns ." FROM ".$this->tablename." WHERE  SYNC_DATE > ".$sql->Param('a').""),array($this->date)) ;
+                }else{
+                    $stmt = $sql->Execute($sql->Prepare("SELECT ". $this->columns ." FROM ".$this->tablename." ")) ;
+                }
+            }else{
+                $stmt = false;
+            }
+        }
+
+        $time = date('Y-m-d H:i:s');
+        if($stmt == true){
+
+            if($stmt->recordCount() > 0){
+                $result = array();
+                while ($data = $stmt->FetchNextObject()){
+                    $result[] = $data;
+                }
+
+            }
+
+            //ADD ON SELECT FOR NEW ZONE
+
+            if( $this->tablename =='area_clients'){
+
+                $newzone = $this->checkForNewZone();
+
+
+                if(count($newzone) > 0){
+
+
+                    foreach ($newzone as $mobj){
+
+                        $agentzone_string .= "'".$mobj["AGZ_ZONECODE"]."',";
+                    }
+                    $agentzone_string = substr($agentzone_string,0,-1);
+
+
+                    $insert_query="  AND ".$this->table_zones[$this->tablename]." IN (".$agentzone_string.")  ";
+
+
+
+                    $stmt1 = $sql->Execute($sql->Prepare("SELECT ". $this->columns ." FROM ".$this->tablename." WHERE ".$this->column." = ".$sql->Param('a')." ".$insert_query." "),array($this->companycode)) ;
+
+                    if($stmt1->recordCount() > 0){
+
+
+                        $lists = $this->format_list($result);
+
+
+                        while($data1 = $stmt1->FetchNextObject()){
+
+                            if($data1->CLNT_CODE != $lists['CLNT_CODE']){
+                                $result[] = $data1;
+                            }
+                        }
+
+                    }
+
+                }
+
+            }//end of add new zone
+
+            if(count($result) > 0){
+
+
+
+                $this->response( array( 'data'=>'true','syncdate'=>$time,'result'=>$result),200);
+            }else{
+                $this->response(array('data'=>'error','syncdate'=>$time,'result'=>array(),'msg'=>'No record found'),404);
+            }
+        }else{
+            $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+        }
+    }
+
+    public function getAgentZones(){
+        $return_array = array();
+
+        if($this->agentcode !=""){
+            $stmt = $this->sql->Execute($this->sql->Prepare("SELECT AGZ_ZONECODE FROM area_agentzones WHERE  AGZ_COMPID = ".$this->sql->Param('a')." AND AGZ_AGCODE = ".$this->sql->Param('a')." "),array($this->companycode,$this->agentcode)) ;
+
+            if($stmt->recordCount() > 0){
+
+                $return_array = $stmt->GetAll();
+
+            }
+
+        }
+
+
+        return $return_array;
+
+    }
+
+    public function checkForNewZone(){
+        $return_array = array();
+        if($this->agentcode !="" && $this->date !=""){
+            $stmt = $this->sql->Execute($this->sql->Prepare("SELECT AGZ_ZONECODE FROM area_agentzones WHERE  AGZ_COMPID = ".$this->sql->Param('a')." AND AGZ_AGCODE = ".$this->sql->Param('a')." AND SYNC_DATE > ".$this->sql->Param('a')." "),array($this->companycode,$this->agentcode,$this->date)) ;
+
+            if($stmt->recordCount() > 0){
+
+                $return_array = $stmt->GetAll();
+
+            }
+
+        }
+
+        return $return_array;
+
+    }//end
+
+    function format_list($inputlist){
+
+        $listts = array();
+        if(is_array($inputlist)){
+
+
+            for($i=0;$i<count($inputlist);$i++){
+
+                $listts[] =  $inputlist[$i]->CLNT_CODE;
+            }
+        }
+
+
+        return $listts;
+    }//end
+
+}

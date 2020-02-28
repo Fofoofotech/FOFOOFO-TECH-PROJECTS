@@ -1,0 +1,254 @@
+<?php
+
+/**
+ * loginuser short summary.
+ *
+ * loginuser description.
+ *
+ * @version 1.0
+ * @author Reggie
+ */
+class clientregistration extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+        $smartsms = new SmartSMSClass();
+        $zone_allies ='';
+        $thisdate = date('Y-m-d h:m:s');
+        $senderid = $engine->getFacilityDetails($this->clientcompanycode)->FACI_SMS_KEYWORD;
+        $companycontact = $engine->getFacilityDetails($this->clientcompanycode)->FACI_PHONENUM;
+        $companyname = $engine->getFacilityDetails($this->clientcompanycode)->FACI_NAME;
+
+        $api = $engine->generateAPIKey();
+        if (isset($this->clientnum) && !empty($this->clientnum)){
+            $stmt_tag = $sql->Execute($sql->Prepare("SELECT * FROM area_clients WHERE CLNT_COMPCODE = ".$sql->Param('a')." AND CLNT_NUM = ".$sql->Param('b')),array($this->clientcompanycode,$this->clientnum));
+            if ($stmt_tag->RecordCount() > 0){
+                $tag_username = $stmt_tag->FetchNextObject()->CLNT_NAME;
+                $this->response(array('data'=>'error','msg'=>'This tag name is already in use by '.$tag_username.', please pick another tag name'),504);
+            }else{
+                if(!empty($this->clientname)){
+
+                    if (!empty($this->picture)){
+                        $picturename = $client->generateNameforClientPhoto(str_replace(' ','',$this->clientname)).'.jpg';
+                        touch(SPATH_PHOTO.$picturename);
+                        $fp = fopen(SPATH_PHOTO.$picturename, "wb");
+                        fwrite($fp,base64_decode($this->picture));
+                        fclose($fp);
+                    }else{
+                        $picturename = '';
+                    }
+                    $stmt_faci = $sql->Execute($sql->Prepare("SELECT * FROM areab_allfacilities WHERE FACI_CODE = ".$sql->Param('a')),array($this->clientcompanycode));
+                    if ($stmt_faci->RecordCount() > 0){
+                        if ($stmt_faci->FetchNextObject()->FACI_AUTHCLIENT == '1'){
+                            $status = '0';
+                        }else{
+                            $status = '1';
+                        }
+                    }
+                    $stmt_zonename = $sql->Execute($sql->Prepare("SELECT ZON_NAME,ZON_ALIAS,ZON_BRCODE FROM area_zones WHERE ZON_CODE = ".$sql->Param('a')),array($this->clientzonecode));
+                    print $sql->ErrorMsg();
+                    
+                        $zone = $stmt_zonename->FetchNextObject();
+                        $zonename = $zone->ZON_NAME;
+                        $zone_allies = $zone->ZON_ALIAS;
+                        $branchcode = $zone->ZON_BRCODE;
+                    
+                    $clientcode = $client->generateCode('area_clients','CLNT','CLNT_CODE',$this->clientcompanycode);
+                       $clientrefcode = 'REF'.$this->clientnum;
+                    //$branchcode = $engine->getUserDetails($this->agentcode,$this->clientcompanycode)->USR_COMPBRANCH;
+                    $stmt_branchname = $sql->Execute($sql->Prepare("SELECT BRN_NAME FROM area_set_branch WHERE BRN_CODE = ".$sql->Param('a')),array($branchcode));
+                    if ($stmt_branchname){
+                        $branchname = $stmt_branchname->FetchNextObject()->BRN_NAME;
+                    }
+                    //LOAD COMPANYS SMS KEYWORDS
+                    $sms_keywords = $this->companiesSmsKeyWord();
+                    $clientpaymentmethodcode = 'PM_C0001';
+                    $clientpaymentmethod = 'Cash';
+                    $stmt = $sql->Execute($sql->Prepare("INSERT INTO area_clients (CLNT_CODE, CLNT_NUM, CLNT_NAME, CLNT_CONTACT_PERSON, CLNT_RSADDRESS, CLNT_GHPOSTGPS, CLNT_POSTAL, CLNT_CORD, CLNT_MOMO_WALLET, CLNT_CATEGORY_CODE, CLNT_CATEGORY, CLNT_ZONE_CODE, CLNT_BARCODE, CLNT_PMT_CAT_CODE, CLNT_PMT_CAT, CLNT_DISCOUNT_CODE, CLNT_DISCOUNT, CLNT_COMPCODE, CLNT_PMT_MET_CODE, CLNT_PMT_MET, CLNT_ZONE_NAME, CLNT_STATUS, CLNT_SOURCE, CLNT_IMAGE, CLNT_REFCODE, CLNT_REGFEE, CLNT_ACTOR_CODE, CLNT_ACTOR_NAME, CLNT_BRANCH_CODE, CLNT_BRANCH, CLNT_AGNT_CODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').", ".$sql->Param('12').", ".$sql->Param('13').", ".$sql->Param('14').", ".$sql->Param('15').", ".$sql->Param('16').", ".$sql->Param('17').", ".$sql->Param('18').", ".$sql->Param('19').", ".$sql->Param('20').", ".$sql->Param('21').", ".$sql->Param('22').", ".$sql->Param('23').", ".$sql->Param('24').", ".$sql->Param('25').", ".$sql->Param('26').", ".$sql->Param('27').", ".$sql->Param('28').", ".$sql->Param('29').", ".$sql->Param('30').", ".$sql->Param('31').")"),array($clientcode, $this->clientnum, $this->clientname, $this->clientcontactperson, $this->clientresidenceaddress, $this->clientghpostgps, $this->clientpostal, $this->clientcordinate, $this->clientmomowallet, $this->clientcategorycode, $this->clientcategoryname, $this->clientzonecode, $this->clientbarcode, $this->paymentcategorycode, $this->paymentcategoryname, $this->clientdiscountcode, $this->clientdiscount, $this->clientcompanycode, $clientpaymentmethodcode, $clientpaymentmethod, $zonename, $status, '2', $picturename, $clientrefcode, $this->clientfee, $this->agentcode, $this->agentname, $branchcode, $branchname, $this->agentcode));
+
+                    if ($stmt) {
+                        $clstcode = $client->generateCode('area_client_states', 'CLST', 'CLST_CODE',$this->clientcompanycode);
+                        $clntstate = $sql->Execute($sql->Prepare("INSERT INTO area_client_states (CLST_COMPCODE,CLST_CODE,CLST_CLNTCODE,CLST_CLNTNUM,CLST_DATE,CLST_CLNTZON) VALUES({$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')})"), [$this->clientcompanycode,$clstcode, $clientcode, $this->clientnum, date('Y-m-d h:m:s'), $this->clientzonecode]);
+
+//                        $validate_mobile = $smartsms->validateCountryMobilePrefix($sms_keywords[$this->clientcompanycode][1],$this->clientcontactperson);
+                        if($this->clientcontactperson){
+                            //IF MOBILE NUMBER AND VALID
+//                            $message = "Dear customer, Thank you for choosing Asadu Royal Seed and Waste Mgt. You are assured of a prompt and reliable service with us. For more info contact 0302412243. Thank you.";
+                            $clientmonthlypayment = $engine->monthlyAmount($this->paymentcategorycode);
+                            $message = $companyname."\nName: ".$this->clientname." \nTag ID: ".$this->clientnum."\nZone: ".$zonename."\nRegAmt: GHC10\nMonthlyBill: GHC".$clientmonthlypayment."\nRegDate: ".date('d/m/Y')."\nCall care: 0302412243.\nThank You.";
+                            $messagecount = strlen($message);
+                            $messagecost = ceil($messagecount / 160);
+                            $smsbalance = $engine->getCompBal($this->clientcompanycode);
+                            $smssendingstatus = ($smsbalance > $messagecost) ? '1' : '0';
+
+                            if(!empty($this->clientcontactperson)){
+                                $validated = $engine->validateNumber($this->clientcontactperson);
+                                $msgcode = $engine->generateCode('area_sms_message', '', 'MSG_CODE',$this->clientcompanycode);
+                                $stmd=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message(MSG_CODE,MSG_COMPCODE,MSG_MESSAGE,MSG_TYPE,MSG_STATUS,MSG_DATE) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgcode,$this->clientcompanycode,$message,'1',$smssendingstatus,$thisdate));
+
+                                if(!preg_match('/ERR/i', $validated)){
+                                    $prefix2='MSGD-'.date('dmy');
+                                    $msgDcod=$engine->generateCode('area_sms_message_details', $prefix2, 'MSGD_CODE',$this->clientcompanycode);
+                                    $std=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message_details(MSGD_CODE,MSGD_MSGCODE,MSGD_COMPCODE,MSGD_CLTAGNAME,MSGD_PHONENUMBER,MSGD_TYPE,MSGD_STATUS,MSGD_DATE,MSGD_TOTMSG,MSGD_CLTZONECODE,MSGD_CLTBRANCHCODE,MSGD_CLTCATCODE,MSGD_AGNCODE,MSGD_CLNTTAG) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgDcod,$msgcode,$this->clientcompanycode,$this->clientname,$validated,'0',$smssendingstatus,$thisdate,'1',$this->clientzonecode,$branchcode,$this->clientcategorycode,$this->agentcode,$this->clientnum));
+
+                                    if ($smsbalance  > $messagecost) {
+                                        //  Send SMS if sms balance if more than sms cost
+                                        $sendmy=$smartsms->sendSMSNEW($senderid,$validated,$message);
+
+                                        if(preg_match('/Success/i',$sendmy) == true){
+                                            //  Deduct sms cost from sms balance if sms is sent
+                                            $engine->getSMSDeduction($this->clientcompanycode,$messagecost);
+                                        }
+                                    }
+
+                                }
+                            }
+
+                        }
+
+                        $eventype = '013';
+                        $activity = 'A new client has been registered by agent with code ' . $this->agentcode;
+                        
+                        $engine->setEventLog($eventype, $this->agentcode, $this->agentname, $activity,$this->clientcompanycode);
+
+                        $actorcode = $this->agentcode;
+                        $code = '001';
+                        $desc = "A new client has been registered by agent {$this->agentname} awaiting your approval.";
+                        $menudetailscode = '0028';
+                        $tablerowid = $sql->insert_Id();
+                        $engine->setNotification($actorcode, $code, $desc, $menudetailscode, $tablerowid, '', '');
+
+                        $this->response(array('response' => true, array('data' => null)), 200);
+                    }else{
+                        $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+                    }
+                }else{
+                    $this->response(array('data'=>'error','msg'=>'Client Name can not be empty'),404);
+                }
+            }
+        }else{
+//if is a new client whois being registered 
+            if(!empty($this->clientname)){
+
+                if (!empty($this->picture)){
+                    $picturename = $client->generateNameforClientPhoto(str_replace(' ','',$this->clientname)).'.jpg';
+                    touch(SPATH_PHOTO.$picturename);
+                    $fp = fopen(SPATH_PHOTO.$picturename, "wb");
+                    fwrite($fp,base64_decode($this->picture));
+                    fclose($fp);
+                }else{
+                    $picturename = '';
+                }
+                $stmt_faci = $sql->Execute($sql->Prepare("SELECT * FROM areab_allfacilities WHERE FACI_CODE = ".$sql->Param('a')),array($this->clientcompanycode));
+                if ($stmt_faci->RecordCount() > 0){
+                    if ($stmt_faci->FetchNextObject()->FACI_AUTHCLIENT == '1'){
+                        $status = '0';
+                    }else{
+                        $status = '1';
+                    }
+                }
+                $stmt_zonename = $sql->Execute($sql->Prepare("SELECT ZON_NAME,ZON_ALIAS,ZON_BRCODE FROM area_zones WHERE ZON_CODE = ".$sql->Param('a')),array($this->clientzonecode));
+                print $sql->ErrorMsg();
+                
+                    $zone = $stmt_zonename->FetchNextObject();
+                    $zonename = $zone->ZON_NAME;
+                    $zone_allies = $zone->ZON_ALIAS;
+                    $branchcode =  $zone->ZON_BRCODE;
+                
+                $clientcode = $client->generateCode('area_clients','CLNT','CLNT_CODE',$this->clientcompanycode);
+                //$clientnum = $engine->genClientNum($zonename);
+                $clientnum = $engine->clientNumber($zone_allies,$this->clientcompanycode);
+                $clientrefcode = 'REF'.$clientnum;
+                //$branchcode = $engine->getUserDetails($this->agentcode,$this->clientcompanycode)->USR_COMPBRANCH;
+                $stmt_branchname = $sql->Execute($sql->Prepare("SELECT BRN_NAME FROM area_set_branch WHERE BRN_CODE = ".$sql->Param('a')),array($branchcode));
+                if ($stmt_branchname){
+                    $branchname = $stmt_branchname->FetchNextObject()->BRN_NAME;
+                }
+                //LOAD COMPANYS SMS KEYWORDS
+                $sms_keywords = $this->companiesSmsKeyWord();
+                $clientpaymentmethodcode = 'PM_C0001';
+                $clientpaymentmethod = 'Cash';
+                $stmt = $sql->Execute($sql->Prepare("INSERT INTO area_clients (CLNT_CODE, CLNT_NUM, CLNT_NAME, CLNT_CONTACT_PERSON, CLNT_RSADDRESS, CLNT_GHPOSTGPS, CLNT_POSTAL, CLNT_CORD, CLNT_MOMO_WALLET, CLNT_CATEGORY_CODE, CLNT_CATEGORY, CLNT_ZONE_CODE, CLNT_BARCODE, CLNT_PMT_CAT_CODE, CLNT_PMT_CAT, CLNT_DISCOUNT_CODE, CLNT_DISCOUNT, CLNT_COMPCODE, CLNT_PMT_MET_CODE, CLNT_PMT_MET, CLNT_ZONE_NAME, CLNT_STATUS, CLNT_SOURCE, CLNT_IMAGE, CLNT_REFCODE, CLNT_REGFEE, CLNT_ACTOR_CODE, CLNT_ACTOR_NAME, CLNT_BRANCH_CODE, CLNT_BRANCH, CLNT_AGNT_CODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').", ".$sql->Param('12').", ".$sql->Param('13').", ".$sql->Param('14').", ".$sql->Param('15').", ".$sql->Param('16').", ".$sql->Param('17').", ".$sql->Param('18').", ".$sql->Param('19').", ".$sql->Param('20').", ".$sql->Param('21').", ".$sql->Param('22').", ".$sql->Param('23').", ".$sql->Param('24').", ".$sql->Param('25').", ".$sql->Param('26').", ".$sql->Param('27').", ".$sql->Param('28').", ".$sql->Param('29').", ".$sql->Param('30').", ".$sql->Param('31').")"),array($clientcode, $clientnum, $this->clientname, $this->clientcontactperson, $this->clientresidenceaddress, $this->clientghpostgps, $this->clientpostal, $this->clientcordinate, $this->clientmomowallet, $this->clientcategorycode, $this->clientcategoryname, $this->clientzonecode, $this->clientbarcode, $this->paymentcategorycode, $this->paymentcategoryname, $this->clientdiscountcode, $this->clientdiscount, $this->clientcompanycode, $clientpaymentmethodcode, $clientpaymentmethod, $zonename, $status, '2', $picturename, $clientrefcode, $this->clientfee, $this->agentcode, $this->agentname, $branchcode, $branchname, $this->agentcode));
+
+                if ($stmt) {
+                    $clstcode = $client->generateCode('area_client_states', 'CLST', 'CLST_CODE',$this->clientcompanycode);
+                    $clntstate = $sql->Execute($sql->Prepare("INSERT INTO area_client_states (CLST_COMPCODE,CLST_CODE,CLST_CLNTCODE,CLST_CLNTNUM,CLST_DATE,CLST_CLNTZON) VALUES({$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')},{$sql->Param('a')})"), [$this->clientcompanycode,$clstcode, $clientcode, $clientnum, date('Y-m-d h:m:s'), $this->clientzonecode]);
+
+//                    $validate_mobile = $smartsms->validateCountryMobilePrefix($sms_keywords[$this->clientcompanycode][1],$this->clientcontactperson);
+                    if($this->clientcontactperson){
+                        //IF MOBILE NUMBER AND VALID
+//                        $message = "Dear customer, Thank you for choosing Asadu Royal Seed and Waste Mgt. You are assured of a prompt and reliable service with us. For more info contact 0302412243. Thank you.";
+                        $clientmonthlypayment = $engine->monthlyAmount($this->paymentcategorycode);
+                        $message = $companyname."\nName: ".$this->clientname." \nTag ID: ".$clientnum."\nZone: ".$zonename."\nRegAmt: GHC10\nMonthlyBill: GHC".$clientmonthlypayment."\nRegDate: ".date('d/m/Y')."\nCall care: 0302412243.\nThank You.";
+
+                        $messagecount = strlen($message);
+                        $messagecost = ceil($messagecount / 160);
+                        $smsbalance = $engine->getCompBal($this->clientcompanycode);
+                        $smssendingstatus = ($smsbalance > $messagecost) ? '1' : '0';
+                        if(!empty($this->clientcontactperson)){
+                            $validated = $engine->validateNumber($this->clientcontactperson);
+                            $msgcode = $engine->generateCode('area_sms_message', '', 'MSG_CODE',$this->clientcompanycode);
+                            $stmd=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message(MSG_CODE,MSG_COMPCODE,MSG_MESSAGE,MSG_TYPE,MSG_STATUS,MSG_DATE) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgcode,$this->clientcompanycode,$message,'1',$smssendingstatus,$thisdate));
+
+                            if(!preg_match('/ERR/i', $validated)){
+                                $prefix2='MSGD-'.date('dmy');
+                                $msgDcod=$engine->generateCode('area_sms_message_details', $prefix2, 'MSGD_CODE',$this->clientcompanycode);
+                                $std=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message_details(MSGD_CODE,MSGD_MSGCODE,MSGD_COMPCODE,MSGD_CLTAGNAME,MSGD_PHONENUMBER,MSGD_TYPE,MSGD_STATUS,MSGD_DATE,MSGD_TOTMSG,MSGD_CLTZONECODE,MSGD_CLTBRANCHCODE,MSGD_CLTCATCODE,MSGD_AGNCODE,MSGD_CLNTTAG) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgDcod,$msgcode,$this->clientcompanycode,$this->clientname,$validated,'0',$smssendingstatus,$thisdate,'1',$this->clientzonecode,$branchcode,$this->clientcategorycode,$this->agentcode,$clientnum));
+
+                                if ($smsbalance  > $messagecost) {
+                                    //  Send SMS if sms balance if more than sms cost
+                                    $sendmy=$smartsms->sendSMSNEW($senderid,$validated,$message);
+
+                                    if(preg_match('/Success/i',$sendmy) == true){
+                                        //  Deduct sms cost from sms balance if sms is sent
+                                        $engine->getSMSDeduction($this->clientcompanycode,$messagecost);
+                                    }
+                                }
+
+                            }
+                        }
+                    }
+
+                    $eventype = '013';
+                    $activity = 'A new client has been registered by agent with code ' . $this->agentcode;
+                    $engine->setEventLog($eventype, $this->agentcode, $this->agentname, $activity,$this->clientcompanycode);
+
+                    $actorcode = $this->agentcode;
+                    $code = '001';
+                    $desc = "A new client has been registered by agent {$this->agentname} awaiting your approval.";
+                    $menudetailscode = '0028';
+                    $tablerowid = $sql->insert_Id();
+                    $engine->setNotification($actorcode, $code, $desc, $menudetailscode, $tablerowid, '', '');
+
+                    $this->response(array('response' => true, array('data' => null)), 200);
+                }else{
+                    $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+                }
+            }else{
+                $this->response(array('data'=>'error','msg'=>'Client Name can not be empty'),404);
+            }
+        }
+
+    }
+
+    /**
+     * This function return an array containing key pair values for company code and sms keyword
+     * @return array
+     */
+    public function companiesSmsKeyWord(){
+        $compcode_smskeypair = array();
+        $stmt = $this->sql->Execute("SELECT FACI_CODE,FACI_SMS_KEYWORD,FACI_COUNTRY FROM areab_allfacilities WHERE FACI_STATUS ='1' AND FACI_SMS_KEYWORD IS NOT NULL");
+
+        while($obj = $stmt->FetchNextObject()){
+            $compcode_smskeypair[$obj->FACI_CODE] = array($obj->FACI_SMS_KEYWORD,$obj->FACI_COUNTRY);
+        }
+        return $compcode_smskeypair;
+    }//end of companiesSmsKeyWord
+}

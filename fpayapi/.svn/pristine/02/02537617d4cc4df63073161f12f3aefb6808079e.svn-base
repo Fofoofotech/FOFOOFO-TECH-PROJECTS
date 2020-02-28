@@ -1,0 +1,72 @@
+<?php
+
+/**
+ * loginuser short summary.
+ *
+ * loginuser description.
+ *
+ * @version 1.0
+ * @author Reggie
+ */
+
+class loginuser extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$session;
+        $this->sql=$sql;
+        $this->session=$session;
+    }
+    function Init(){
+        $sql=$this->sql;
+        $engine=new engineClass();
+        $crypt = new cryptCls();
+        $password = $crypt->loginPassword($this->uname,$this->pwd);
+
+        $stmt = $sql->Execute($sql->Prepare("SELECT USR_CODE,USR_FACICODE,USR_SURNAME,USR_OTHERNAME,USR_TOKEN,USR_STATUS,AG_EMAIL,AG_PICNAME,AG_CONTACT,USR_PHONENO,AG_COMPBRANCH FROM area_agent_connect JOIN area_agents ON USR_CODE=AG_CODE WHERE USR_STATUS = '1' AND USR_STATE = '2' AND USR_USERNAME=".$sql->Param('a')." AND USR_PASSWORD=".$sql->Param('b')." AND USR_FACICODE=".$sql->Param('c')." "),array($this->uname,$password,$this->companycode));
+
+        if($stmt->RecordCount() == 1){
+            $arr = $stmt->FetchNextObject();
+            $userid = $arr->USR_CODE;
+            $userfacicode = $arr->USR_FACICODE;
+            $accstatus = $arr->USR_STATUS;
+            $userfullname = $arr->USR_OTHERNAME.' '.$arr->USR_SURNAME;
+            $usertoken = $arr->USR_TOKEN;
+            $userphone = $arr->USR_PHONENO;
+            $email = $arr->AG_EMAIL;
+            $photo = $arr->AG_PICNAME;
+            $branchcode = $arr->AG_COMPBRANCH;
+
+            $stmti = $sql->Execute($sql->Prepare("SELECT AGZ_AGCODE,AGZ_ZONECODE,FACI_NAME,FACI_AUTHCLIENT FROM area_agentzones JOIN areab_allfacilities ON AGZ_COMPID=FACI_CODE WHERE AGZ_AGCODE=".$sql->Param('a')." AND AGZ_STATUS='1' "),array($userid));
+
+            if($stmti == true){
+                $agentzonecode = [];
+                while ($data = $stmti->FetchNextObject()){
+                    $agentzonecode[] = $data->AGZ_ZONECODE;
+                    $companyname = $data->FACI_NAME;
+                    $companyauthstatus = $data->FACI_AUTHCLIENT;
+                }
+                
+                $agentzonecode = implode("','",$agentzonecode);
+               
+                $stmt = $this->sql->Execute($this->sql->Prepare("SELECT ZON_CODE,ZON_NAME FROM area_zones WHERE ZON_CODE IN ('".$agentzonecode."') AND ZON_COMPCODE=".$this->sql->Param('a')),array($this->companycode));
+                print $this->sql->ErrorMsg();
+                $agentzonename =  array();
+                if ($stmt->RecordCount() > 0){
+                    $agentzonename = $stmt->GetAll();
+                }
+                
+                
+            
+//                $profileimgurl = $photo;
+
+                $this->response( array('data'=>'true','userid'=>$userid,'token'=>$usertoken,'fullname'=>$userfullname,'photo'=>$photo,'companycode'=>$userfacicode,'email'=>$email,'agentzonecode'=>$agentzonecode,'agentzones'=>$agentzonename,'companyname'=>$companyname,'userphone'=>$userphone,'companyauthstatus'=>$companyauthstatus,'imgurl'=>$this->imgurl,'webimgurl'=>$this->webimgurl,'branchcode'=>$branchcode),200);
+            }else{
+                $this->response(array('data'=>'Error','msg'=>$sql->ErrorMsg(),'status'=>'550'),200);
+            }
+        }else{
+            $this->response('Error: Over and Out!!!',400);
+        }
+    }
+
+}

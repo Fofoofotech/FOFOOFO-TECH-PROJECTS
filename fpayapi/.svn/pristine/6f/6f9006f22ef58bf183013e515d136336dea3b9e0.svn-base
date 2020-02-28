@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/30/2018
+ * Time: 12:34 PM
+ */
+class authenicateagentcompany extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+
+        if(isset($this->companycode)&&!empty($this->companycode)){
+            $stmt = $sql->Execute($sql->Prepare("SELECT * FROM areab_allfacilities WHERE FACI_APPCODE = ".$sql->Param('a')." AND FACI_STATUS = '1'"),array($this->companycode));
+            print $sql->ErrorMsg();
+            if ($stmt->RecordCount() > 0){
+                $obj = $stmt->FetchNextObject();
+                $companycode = $obj->FACI_CODE;
+                $companyname = $obj->FACI_NAME;
+
+                $this->response( array('data'=>'success','companycode'=>$companycode,'companyname'=>$companyname),200);
+            }else{
+                $this->response(array('data'=>'error','msg'=>'This company does not exist.'),504);
+            }
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Company code can not be empty'),404);
+        }
+
+    }
+
+}

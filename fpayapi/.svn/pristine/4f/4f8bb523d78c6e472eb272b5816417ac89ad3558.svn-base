@@ -1,0 +1,43 @@
+<?php
+/**
+ * This class fetches the client categories for the agent
+ * @author S3LORM
+ */
+class clientfrequency extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+
+
+        $stmt = $sql->Execute($sql->Prepare("SELECT FREQ_CODE,FREQ_COMPCODE,FREQ_DATE,FREQ_NAME,FREQ_STATUS FROM area_frequency WHERE FREQ_COMPCODE = ".$sql->Param('a')." AND FREQ_STATUS = '1' ORDER BY FREQ_DATE DESC "),array($this->companycode));
+        $frequency = array();
+        if($stmt == true){
+            if($stmt->recordCount() > 0){
+                while($data = $stmt->FetchNextObject()){
+                    $freqcode = $data->FREQ_CODE;
+                    $freqname = $data->FREQ_NAME;
+
+                    $frequency[]=array('freqcode'=>$freqcode,'freqname'=>$freqname);
+                }
+
+                $this->response( array( 'data'=>'true','frequency'=>$frequency),200);
+
+            }else{
+                $this->response(array('data'=>'error','msg'=>'No record found'),404);
+            }
+
+        }else{
+            $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+        }
+    }
+
+}
+?>

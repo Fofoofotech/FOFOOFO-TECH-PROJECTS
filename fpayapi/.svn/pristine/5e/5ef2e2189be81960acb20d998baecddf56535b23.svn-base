@@ -1,0 +1,42 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 12/14/2018
+ * Time: 12:52 PM
+ */
+
+include '../config.php';
+$engine = new engineClass();
+$smartsms = new SmartSMSClass();
+
+$stmt=$sql->Execute($sql->Prepare("SELECT * FROM area_sms_message LEFT JOIN area_sms_message_details ON MSG_CODE=MSGD_MSGCODE WHERE MSG_STATUS = ".$sql->Param('a')),array('0'));
+if($stmt->RecordCount() > 0) {
+    while ($obj = $stmt->FetchNextObj()){
+        $message = $obj->MSG_MESSAGE;
+        $validated = $obj->MSGD_PHONENUMBER;
+        $msgcode = $obj->MSG_CODE;
+        $msgdcode = $obj->MSGD_CODE;
+        $companycode = $obj->MSG_COMPCODE;
+
+        $messagecount = strlen($message);
+        $messagecost = ceil($messagecount / 160);
+        $smsbalance = $engine->getCompBal($companycode);
+        $senderid = $engine->getFacilityDetails($companycode)->FACI_SMS_KEYWORD;
+
+        if ($smsbalance  > $messagecost) {
+            //  Send SMS if sms balance if more than sms cost
+            $sendmy=$smartsms->sendSMSNEW($senderid,$validated,$message);
+
+            if(preg_match('/Success/i',$sendmy) == true){
+                //  Deduct sms cost from sms balance if sms is sent
+                $engine->getSMSDeduction($companycode,$messagecost);
+                //  update area_sms_message
+                $sql->Execute($sql->Prepare("UPDATE area_sms_message SET MSG_STATUS = ".$sql->Param('a')." WHERE MSG_CODE = ".$sql->Param('b')),array('1',$msgcode));
+                //  update area_sms_message_details
+                $sql->Execute($sql->Prepare("UPDATE area_sms_message_details SET MSGD_STATUS = ".$sql->Param('a')." WHERE MSGD_CODE = ".$sql->Param('b')),array('1',$msgdcode));
+            }
+        }
+    }
+
+}

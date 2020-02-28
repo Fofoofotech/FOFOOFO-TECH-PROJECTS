@@ -1,0 +1,48 @@
+<?php
+/**
+ * This class save transaction for client through the agent app
+ * @author S3LORM
+ */
+class agentchangepassword extends REST{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+		$sql=$this->sql;
+        $crypt = new cryptCls();
+        //var_dump($_REQUEST); die();
+
+        // Get Old Photo
+        $stmtpass = $sql->Execute($sql->Prepare("SELECT USR_PASSWORD,USR_USERNAME FROM area_agent_connect WHERE USR_CODE=".$sql->Param('a')." "),array($this->agentid));
+        $objs = $stmtpass->FetchNextObject();
+        $oldpassword = $objs->USR_PASSWORD;
+        $username = $objs->USR_USERNAME;
+        $passentered = $crypt->loginPassword($username,$this->oldpass);
+
+
+        if($oldpassword == $passentered){
+
+            if($newpass != 'null' && $newpass != 'undefined'){
+                    $password = $crypt->loginPassword($username,$this->newpass);
+                }else{
+                    $password = $oldpassword;
+            }
+
+            $stmt = $sql->Execute($sql->Prepare("UPDATE area_agent_connect SET USR_PASSWORD=".$sql->Param('a')." WHERE USR_CODE=".$sql->Param('b').""),array($password,$this->agentid));
+
+
+            if($stmt == true){
+                $this->response( array('data'=>'true','msg'=>"success"),200);
+            }else{
+                $this->response( array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+            }
+        }else{
+            $this->response( array('data'=>'error','msg'=>'wrong-old'),204);
+        }
+    }
+}
+?>

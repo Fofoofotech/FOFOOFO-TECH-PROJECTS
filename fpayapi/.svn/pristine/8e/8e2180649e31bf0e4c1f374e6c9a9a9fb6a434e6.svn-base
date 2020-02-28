@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * loginuser short summary.
+ *
+ * loginuser description.
+ *
+ * @version 1.0
+ * @author Reggie
+ */
+class clientupdate extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+
+		 if(!empty($this->clientcode)){
+             if (!empty($this->picture)){
+                 $picturename = '';
+                 if (strpos($this->picture,',') != false) {
+                     $clientimage = explode(',',$this->picture);
+                     $picturename = $client->generateNameforClientPhoto(str_replace(' ', '', $this->clientname)).'.jpg';
+                     touch(SPATH_PHOTO . $picturename);
+                     $fp = fopen(SPATH_PHOTO . $picturename , "wb");
+                     fwrite($fp, base64_decode($clientimage[1]));
+                     fclose($fp);
+                 }else{
+                     $picturename = $this->picture;
+                 }
+             }else{
+                 $picturename = '';
+             }
+
+             $stmt = $sql->Execute($sql->Prepare("SELECT * FROM area_clients WHERE CLNT_CODE = ".$sql->Param('a')),array($this->clientcode));
+             if ($stmt->RecordCount() > 0){
+                 $obj = $stmt->FetchNextObject();
+                 $stmt=$sql->Execute($sql->Prepare("UPDATE area_clients SET CLNT_NAME=".$sql->Param('a').",CLNT_CONTACT_PERSON=".$sql->Param('b').",CLNT_RSADDRESS=".$sql->Param('b').",CLNT_GHPOSTGPS=".$sql->Param('b').",CLNT_POSTAL=".$sql->Param('b').",CLNT_IMAGE=".$sql->Param('b').",CLNT_CATEGORY=".$sql->Param('b').",CLNT_CATEGORY_CODE=".$sql->Param('b').",CLNT_REGFEE=".$sql->Param('b')." WHERE CLNT_CODE=".$sql->Param('c')." "),array($this->clientname,$this->clientcontactperson,$this->clientresidenceaddress,$this->clientghpostgps,$this->clientpostal,$picturename,$this->clientcategorycode,$this->clientcategoryname,$this->clientfee,$this->clientcode));
+                 print $sql->ErrorMsg();
+
+                 if ($stmt){
+                     $this->response( array('response'=>'true',array('data'=>null)),200);
+                 }else{
+                     $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+                 }
+             }
+         }else{
+             $this->response(array('data'=>'error','msg'=>'Client code can not be empty'),404);
+         }
+
+      }
+
+}

@@ -1,0 +1,44 @@
+<?php
+
+/**
+ * loginuser short summary.
+ *
+ * loginuser description.
+ *
+ * @version 1.0
+ * @author Reggie
+ */
+class clientUpdateLocation extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+
+		 if(!empty($this->clientcode) ||!empty($this->location) ){
+
+
+             $stmt = $sql->Execute($sql->Prepare("SELECT * FROM area_clients WHERE CLNT_CODE = ".$sql->Param('a')),array($this->clientcode));
+             if ($stmt->RecordCount() > 0){
+                 $obj = $stmt->FetchNextObject();
+                 $stmt=$sql->Execute($sql->Prepare("UPDATE area_clients SET CLNT_CORD=".$sql->Param('a')." WHERE CLNT_CODE=".$sql->Param('c')." "),array($this->location,$this->clientcode));
+                 print $sql->ErrorMsg();
+
+                 if ($stmt){
+                     $this->response( array('response'=>true,'data'=>null),200);
+                 }else{
+                     $this->response(array('data'=>false,'msg'=>$sql->ErrorMsg()),404);
+                 }
+             }
+         }else{
+             $this->response(array('data'=>false,'msg'=>'Client code can not be empty'),404);
+         }
+
+      }
+
+}

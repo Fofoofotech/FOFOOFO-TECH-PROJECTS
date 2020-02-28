@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/31/2018
+ * Time: 12:19 PM
+ */
+class synchronizeclientbill extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+
+        $time = date('Y-m-d H:i:s');
+
+        $data = json_decode($this->data);
+        if (!empty($data)){
+            $fulldata = array();
+            $allreceipno = array();
+            $listclients = array();
+            $autocode ="";
+            foreach ($data as $clientbill){
+                $autocode = $engine->generateCode("area_client_bill", "CLB", "CLBIL_CODE");
+                $fulldata[] = array($autocode,$clientbill->CLBIL_COMPID,$clientbill->CLBIL_AGCODE,$clientbill->CLBIL_MONTH,$clientbill->CLBIL_YEAR,$clientbill->CLBIL_AMOUNT,$clientbill->CLBIL_DATE,$clientbill->CLBIL_CLTCODE,$clientbill->CLBIL_ZONE_CODE,$clientbill->CLBIL_BRANCHCODE,$clientbill->CLBIL_ACTCODE,$clientbill->CLBIL_TXCODE,$clientbill->CLBIL_CLTNUM,$clientbill->CLBIL_TRANS_RECEIPTNUM,$clientbill->CLBIL_RECEIPTNUMS);
+                $allreceipno[] = $clientbill->CLBIL_RECEIPTNUMS;
+                $listclients[] = $clientbill->CLBIL_CLTNUM;
+            }
+            $stmt_clientbill = $sql->Execute("INSERT INTO area_client_bill(CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT, CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_ACTCODE, CLBIL_TXCODE, CLBIL_CLTNUM,CLBIL_TRANS_RECEIPTNUM,CLBIL_RECEIPTNUMS) VALUES(".$sql->Param('1').",".$sql->Param('2').",".$sql->Param('3').",".$sql->Param('4').",".$sql->Param('5').",".$sql->Param('6').",".$sql->Param('7').",".$sql->Param('8').",".$sql->Param('9').",".$sql->Param('10').",".$sql->Param('11').",".$sql->Param('12').",".$sql->Param('13').",".$sql->Param('14').",".$sql->Param('15').")",$fulldata);
+            
+            //UPDATE LAST PAYDATE
+            $clientlist = explode("','", $listclients);
+            $stmt = $sql->Execute("SELECT CLBIL_CLTNUM,CLBIL_TRANS_RECEIPTNUM,MAX(DATE(CONCAT_WS('-',CLBIL_YEAR,CLBIL_MONTH,'01'))) AS TDATE FROM area_client_bill WHERE CLBIL_CLTNUM IN ('".$clientlist."') AND CLBIL_STATUS IN ('1','2') GROUP BY CLBIL_CLTNUM,CLBIL_TRANS_RECEIPTNUM");
+            while($obj = $stmt->FetchNextObj()){
+                $sql->Execute("UPDATE area_transaction SET TRANS_LAST_PAID = ".$sql->Param('1')." WHERE TRANS_CLIENT_NUM = ".$sql->Param('2')." AND TRANS_RECEIPTNUM =".$sql->Param('3')." ",array($obj->TDATE,$obj->CLBIL_CLTNUM,$obj->CLBIL_TRANS_RECEIPTNUM));
+            }
+            
+                if ($stmt_clientbill){
+                    $eventype = '013';
+                    $activity = 'Synchronization: Agent with code ' . $clientbill->CLBIL_AGCODE.' has submitted client with code '.$clientbill->CLBIL_CLTCODE.'\'s Payment for '.$clientbill->CLBIL_MONTH.', '.$clientbill->CLBIL_YEAR;
+                    $engine->setEventLog($eventype, $clientbill->CLBIL_AGCODE, '', $activity);
+                }
+            
+                $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result'=>$allreceipno),200);
+        }else{
+            $this->response(array('data'=>'false','msg'=>'The data array can not be empty'),404);
+        }
+
+    }
+}

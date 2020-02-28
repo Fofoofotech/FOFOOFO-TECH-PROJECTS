@@ -1,0 +1,49 @@
+<?php
+/**
+ * This class fetches the details of articles for
+ * a specific doctor
+ * @Param::doctorcode
+ *
+ * @author Acker
+ */
+class clientzone extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        if(!empty($this->companycode)&&!empty($this->branchcode)){
+            $stmt = $sql->Execute($sql->Prepare("SELECT ZON_CODE,ZON_COMPCODE,ZON_NAME,ZON_CYCLECODE,ZON_NARRATION,ZON_REGCODE,ZON_DISCODE,ZON_BRCODE FROM area_zones WHERE ZON_STATUS = '1' AND ZON_COMPCODE = ".$sql->Param('a')." AND ZON_BRCODE = ".$sql->Param('b')." ORDER BY ZON_NAME ASC"),array($this->companycode,$this->branchcode));
+            $data = array();
+
+            if($stmt == true){
+                if($stmt->recordCount() > 0){
+                    while($obj = $stmt->FetchNextObject()){
+                        $zonecode = $obj->ZON_CODE;
+                        $zonename = $obj->ZON_NAME;
+                        $zonenarration = $obj->ZON_NARRATION;
+
+                        $data[]=array('zonecode'=>$zonecode,'zonename'=>$zonename,'zonenarration'=>$zonenarration);
+                    }
+                    $this->response( array( 'data'=>'true','data'=>$data),200);
+                }else{
+                    $this->response(array('data'=>'error','msg'=>'No record found'),404);
+                }
+            }else{
+                $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+            }
+
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Company code and branch code can not be empty'),404);
+        }
+    }
+
+
+}
+?>

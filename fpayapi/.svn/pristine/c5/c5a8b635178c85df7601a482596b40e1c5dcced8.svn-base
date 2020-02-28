@@ -1,0 +1,58 @@
+<?php
+
+class recallTrans extends REST
+{
+  function __construct(){
+        parent::__construct();
+        global$sql;
+        $this->sql=$sql;
+    }
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        if(!empty($this->transcode)&&!empty($this->agentcode)&&!empty($this->clientcode)){
+            $notifications = array();
+            $stmt = $sql->Execute($sql->Prepare("SELECT * FROM area_transaction WHERE TRANS_CODE = ".$sql->Param('a')." "),array($this->transcode));
+        
+            if ($stmt->RecordCount() > 0){
+                $obj = $stmt->FetchNextObject();
+                $tablerowid = $obj->TRANS_ID;
+                $trans_status = $obj->TRANS_STATUS;
+                $compcode = $obj->TRANS_COMPCODE;
+                //if ($trans_status != '3' AND $trans_status != '4'){
+                    if (!in_array($trans_status,array('3','4'))){
+
+                        $stmt_update_bill = $sql->Execute($sql->Prepare("UPDATE area_client_bill SET CLBIL_STATUS = ".$sql->Param('a')." WHERE CLBIL_TXCODE = ".$sql->Param('b')),array('2',$this->transcode));
+                    if ($stmt_update_bill){
+                        $stmt_update_trans = $sql->Execute($sql->Prepare("UPDATE area_transaction SET TRANS_STATUS = ".$sql->Param('a')." WHERE TRANS_CODE = ".$sql->Param('b')),array('3',$this->transcode));
+
+                        $stmt_update_balance = $sql->Execute($sql->Prepare("UPDATE area_transaction_balance SET TRSBAL_STATUS = ".$sql->Param('a')." WHERE TRSBAL_TXCODE = ".$sql->Param('b')),array('2',$this->transcode));
+
+                        $activity = 'Agent with code '.$this->agentcode.' has recalled a transaction with transaction code '.$this->transcode;
+                        
+             
+                        $engine->setEventLog('057',$this->agentcode,'',$activity,$compcode);
+                        
+                        $desc = 'Agent with code '.$this->agentcode.' has recalled a transaction with transaction code '.$this->transcode;
+                        $facicode = $engine->getUserDetails($this->agentcode)->USR_FACICODE;
+                        $engine->setNotification($this->agentcode,'002',$desc,'0030',$tablerowid,$facicode,'');
+                        $this->response( array( 'data'=>'true','msg'=>'Success','status'=>200),200);
+                    }else{
+                        $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg(),'status'=>404),404);
+                    }
+                }else{
+                    $this->response(array('data'=>'error','status'=>404,'msg'=>'This transaction has already been recalled, awaiting approval. '.$sql->ErrorMsg()),404);
+                }
+            }else{
+                $this->response(array('data'=>'error','status'=>405,'msg'=>'Please synchronize before you recall. '.$sql->ErrorMsg()),404);
+            }
+
+        }
+    }
+        
+}
+
+
+
+
+?>

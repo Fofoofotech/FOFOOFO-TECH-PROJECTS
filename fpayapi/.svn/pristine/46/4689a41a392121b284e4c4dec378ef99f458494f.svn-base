@@ -1,0 +1,78 @@
+<?php
+
+class sendchequeimage extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+ 
+        $time = date('Y-m-d H:i:s');
+        
+        
+        
+        if(isset($this->agentcode) && !empty($this->compcode) && !empty($this->picture) && !empty($this->date) && !empty($this->transcode) && !empty($this->bank) && !empty($this->branch)){
+           
+            //check if transaction already captured
+            $stmtcheck  = $this->sql->Execute("SELECT * FROM  area_transaction_submitted WHERE SUB_TRANS_DATE = ".$this->sql->Param('1')." AND  SUB_COMPCODE = ".$this->sql->Param('2')." AND SUB_AGENT_CODE = ".$this->sql->Param('3')."  ",array($this->date,$this->compcode,$this->agentcode));
+            
+            if($stmtcheck->RecordCount() == 0){
+                
+                //CHECK FOR THE REAL AMOUNT
+               
+                $realamount = 0;
+                $stmt  = $this->sql->Execute("SELECT SUM(TRANS_AMOUNT) as TAMOUNT FROM  area_transaction WHERE TRANS_DATE = ".$this->sql->Param('1')." AND  TRANS_COMPCODE = ".$this->sql->Param('2')." AND TRANS_AGENT_CODE = ".$this->sql->Param('3')." AND TRANS_STATUS IN ('1','5','0') ",array($this->date,$this->compcode,$this->agentcode));
+                $realamount = $stmt->FetchNextObject()->TAMOUNT;
+              
+               
+                if(empty($realamount)){
+                    $realamount = 0;
+                }
+                if($this->amount == $realamount){
+                //GENERATE NAME AND STORE PICTURE
+                $picturename = $client->generateNameforClientPhoto(str_replace(' ','',$this->transcode)).'.jpg';
+                touch(SPATH_TRANS_REC.$picturename);
+                $fp = fopen(SPATH_TRANS_REC.$picturename, "wb");
+                fwrite($fp,base64_decode($this->picture));
+                fclose($fp);
+                
+                $agentobj = $engine->getUserDetails($this->agentcode,$this->compcode);
+                
+                $allreceipno = array($this->transcode,$this->compcode,$this->agentcode,$agentobj->USR_OTHERNAME.' '.$agentobj->USR_SURNAME,$this->date,$time,$realamount,'0',$agentobj->USR_COMPBRANCH,$this->bank,$this->branch,$picturename,$time,$this->token);
+                
+                $this->sql->Execute("INSERT INTO area_transaction_submitted (SUB_CODE,SUB_COMPCODE,SUB_AGENT_CODE,SUB_AGENT_NAME,SUB_TRANS_DATE,SUB_CREATED_DATE,SUB_AMOUNT,SUB_STATUS,SUB_BRANCH_CODE,SUB_BANK,SUB_BANK_BRANCH,SUB_PICTURE,SUB_SYNC_DATE,SUB_TOKEN) VALUES (".$this->sql->Param('1').",".$this->sql->Param('2').",".$this->sql->Param('3').",".$this->sql->Param('4').",".$this->sql->Param('5').",".$this->sql->Param('6').",".$this->sql->Param('7').",".$this->sql->Param('8').",".$this->sql->Param('9').",".$this->sql->Param('10').",".$this->sql->Param('11').",".$this->sql->Param('12').",".$this->sql->Param('13').",".$this->sql->Param('14').")",$allreceipno);
+                
+                print $this->sql->ErrorMsg();
+                
+                $header_array = array('SUB_CODE','SUB_COMPCODE','SUB_AGENT_CODE','SUB_AGENT_NAME','SUB_TRANS_DATE','SUB_CREATED_DATE','SUB_AMOUNT','SUB_STATUS','SUB_BRANCH_CODE','SUB_BANK','SUB_BANK_BRANCH','SUB_PICTURE','SUB_SYNC_DATE','SUB_TOKEN');
+                $c = array_combine($header_array, $allreceipno);
+                //STORE LOG
+                $eventype = '066';
+                $activity = 'Daily Transaction Request Saved: Transaction => '.serialize($c);
+                
+                
+                $engine->setEventLog($eventype,$this->agentcode, '', $activity,$this->compcode);
+                
+                
+                
+                $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result'=>$c),200);
+                
+                }else{
+                    $this->response(array('data'=>'error','msg'=>'Invalid transaction amount entered. The expected amount is '.$realamount),404);
+                }
+            }else{
+                $this->response(array('data'=>'error','msg'=>'Transaction already exist'),404);
+            }
+            
+            
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Empty data'),404);
+        }
+    }
+}
+

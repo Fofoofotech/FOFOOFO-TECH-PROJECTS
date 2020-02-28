@@ -1,0 +1,32 @@
+<?php
+
+class getsettings extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+        
+        if (!empty($this->compcode) && !empty($this->type)){
+            
+            $stmt = $this->sql->Execute("SELECT FACI_MOMO_PVALUE FROM  areab_allfacilities WHERE FACI_CODE = ".$this->sql->Param('1')." ",array($this->compcode));
+           
+            $amount = $stmt->FetchNextObject()->FACI_MOMO_PVALUE;
+            if(empty($amount)){
+                $amount = 0;
+            }
+            
+            $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result' => floatval($amount)),200);
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Empty data'),404);
+        }
+    }
+}
+

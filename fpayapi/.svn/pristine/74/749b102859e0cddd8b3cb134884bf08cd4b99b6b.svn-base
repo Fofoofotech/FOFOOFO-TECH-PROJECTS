@@ -1,0 +1,75 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/22/2018
+ * Time: 4:29 PM
+ */
+class catfreqzone extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $result = array();
+
+        $stmt_category = $sql->Execute($sql->Prepare("SELECT CLNTCAT_CODE,CLNTCAT_COMPCODE,CLNTCAT_DESCRIPTION,CLNTCAT_NAME,CLNTCAT_STATUS FROM areab_client_category WHERE CLNTCAT_COMPCODE = ".$sql->Param('a')." AND CLNTCAT_STATUS = '1' ORDER BY CLNTCAT_INPUTEDDATE DESC "),array($this->companycode));
+        $category = array();
+        if($stmt_category == true) {
+            if ($stmt_category->recordCount() > 0) {
+                while ($data = $stmt_category->FetchNextObject()) {
+                    $categorycode = $data->CLNTCAT_CODE;
+                    $categoryname = $data->CLNTCAT_NAME;
+                    $categorydescription = $data->CLNTCAT_DESCRIPTION;
+
+                    $category[] = array('categorycode' => $categorycode, 'categoryname' => $categoryname, 'categorydescription' => $categorydescription);
+                }
+            }else{
+                $category[] = '';
+            }
+        }
+
+        $stmt_zone = $sql->Execute($sql->Prepare("SELECT ZON_CODE,ZON_COMPCODE,ZON_NAME,ZON_CYCLECODE,ZON_NARRATION,ZON_REGCODE,ZON_DISCODE,ZON_BRCODE FROM area_zones WHERE ZON_STATUS = '1' AND ZON_COMPCODE = ".$sql->Param('a')." AND ZON_BRCODE = ".$sql->Param('b')),array($this->companycode,$this->branchcode));
+        $zone = array();
+
+        if($stmt_zone == true) {
+            if ($stmt_zone->recordCount() > 0) {
+                while ($obj = $stmt_zone->FetchNextObject()) {
+                    $zonecode = $obj->ZON_CODE;
+                    $zonename = $obj->ZON_NAME;
+                    $zonenarration = $obj->ZON_NARRATION;
+
+                    $zone[] = array('zonecode' => $zonecode, 'zonename' => $zonename, 'zonenarration' => $zonenarration);
+                }
+            }else{
+                $zone[] = '';
+            }
+        }
+
+        $stmt_frequency = $sql->Execute($sql->Prepare("SELECT FREQ_CODE,FREQ_COMPCODE,FREQ_DATE,FREQ_NAME,FREQ_STATUS FROM area_frequency WHERE FREQ_COMPCODE = ".$sql->Param('a')." AND FREQ_STATUS = '1' ORDER BY FREQ_DATE DESC "),array($this->companycode));
+        $frequency = array();
+        if($stmt_frequency == true) {
+            if ($stmt_frequency->recordCount() > 0) {
+                while ($data = $stmt_frequency->FetchNextObject()) {
+                    $freqcode = $data->FREQ_CODE;
+                    $freqname = $data->FREQ_NAME;
+
+                    $frequency[] = array('freqcode' => $freqcode, 'freqname' => $freqname);
+                }
+            }else{
+                $frequency[] = '';
+            }
+        }
+
+        $result = array('category'=>$category,'zone'=>$zone,'frequency'=>$frequency);
+
+        $this->response( array( 'data'=>'true','result'=>$result),200);
+    }
+}

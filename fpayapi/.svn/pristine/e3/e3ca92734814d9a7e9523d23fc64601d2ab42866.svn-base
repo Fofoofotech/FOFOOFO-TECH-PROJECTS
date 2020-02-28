@@ -1,0 +1,27 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/31/2018
+ * Time: 12:18 PM
+ */
+class synchronizetransactionbalance extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+        $allreceipno = array();
+        $bill_trans_code ='';
+        $data = json_decode($this->data);
+        $this->response(array('data'=>'false','msg'=>'The data array can not be empty'),404);
+
+    }
+}

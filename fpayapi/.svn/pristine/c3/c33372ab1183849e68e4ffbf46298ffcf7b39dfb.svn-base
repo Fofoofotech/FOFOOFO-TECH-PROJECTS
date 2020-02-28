@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/31/2018
+ * Time: 11:34 AM
+ */
+
+class synchronizetransaction extends REST
+{
+   
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+
+    function Init(){  
+      //var_dump(  $this->data);die;
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $smartsms = new SmartSMSClass();
+        $time = date('Y-m-d H:i:s');
+
+        $this->response(array('data'=>'error','msg'=>$this->sql->ErrorMsg()),404);
+
+    }
+    
+    /**
+     * This function return an array containing key pair values for company code and sms keyword
+     * @return array
+     */
+    public function companiesSmsKeyWord(){
+        $compcode_smskeypair = array();
+        $stmt = $this->sql->Execute("SELECT FACI_CODE,FACI_SMS_KEYWORD,FACI_COUNTRY FROM areab_allfacilities WHERE FACI_STATUS ='1' AND FACI_SMS_KEYWORD IS NOT NULL");
+        
+        while($obj = $stmt->FetchNextObject()){
+            $compcode_smskeypair[$obj->FACI_CODE] = array($obj->FACI_SMS_KEYWORD,$obj->FACI_COUNTRY);
+        }
+        return $compcode_smskeypair;
+    }//end of companiesSmsKeyWord
+
+    
+}

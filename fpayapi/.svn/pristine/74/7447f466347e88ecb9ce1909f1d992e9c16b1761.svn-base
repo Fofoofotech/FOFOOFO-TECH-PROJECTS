@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * This class fetches the list of diagnostics
+ * in social health
+ *
+ * @author Acker
+ */
+class getclients extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $api = $engine->generateAPIKey();
+
+        $stmt = $sql->Execute($sql->Prepare("SELECT CLNT_CODE,CLNT_NAME,CLNT_CONTACT_PERSON,CLNT_RSADDRESS,CLNT_CATEGORY,CLNT_CATEGORY_CODE,CLNT_BARCODE,CLNT_PMT_CAT_CODE,CLNT_PMT_CAT,CLNT_PMT_MET_CODE,CLNT_PMT_MET,CLNT_DISCOUNT_CODE,CLNT_DISCOUNT,CLNT_IMAGE FROM area_clients WHERE CLNT_STATUS = '1' AND CLNT_COMPCODE = ".$sql->Param('a')." AND CLNT_ZONE_CODE IN ($this->zonecode) "),array($this->companycode)) ;
+
+        if($stmt == true){
+            if($stmt->recordCount() > 0){
+                while($data = $stmt->FetchNextObject()){
+                    $clientcode = $data->CLNT_CODE;
+                    $clientname = $data->CLNT_NAME;
+                    $clientcategorycode = $data->CLNT_CATEGORY_CODE;
+                    $clientcategoryname = $data->CLNT_CATEGORY;
+                    $clientbarcode = $data->CLNT_BARCODE;
+                    $clientpaymentcategorycode = $data->CLNT_PMT_CAT_CODE;
+                    $clientpaymentcategory = $data->CLNT_PMT_CAT;
+                    $clientpaymentmethodcode = $data->CLNT_PMT_MET_CODE;
+                    $clientpaymentmethod = $data->CLNT_PMT_MET;
+                    $clientdiscountcode = $data->CLNT_DISCOUNT_CODE;
+                    $clientdiscount = $data->CLNT_DISCOUNT;
+                    $clientimage = $data->CLNT_IMAGE;
+
+                    $result[] = array('clientcode'=>$clientcode,'clientname'=>$clientname,'clientcategorycode'=>$clientcategorycode,'clientcategoryname'=>$clientcategoryname,'clientbarcode'=>$clientbarcode,'clientpaymentcategorycode'=>$clientpaymentcategorycode,'clientpaymentcategory'=>$clientpaymentcategory,'clientpaymentmethodcode'=>$clientpaymentmethodcode,'clientpaymentmethod'=>$clientpaymentmethod,'clientdiscountcode'=>$clientdiscountcode,'clientdiscount'=>$clientdiscount,'clientimage'=>$clientimage);
+                }
+
+                $this->response( array( 'data'=>'true','result'=>$result),200);
+
+            }else{
+                $this->response(array('data'=>'error','msg'=>'No record found'),404);
+            }
+
+        }else{
+            $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+        }
+    }
+
+}
+?>

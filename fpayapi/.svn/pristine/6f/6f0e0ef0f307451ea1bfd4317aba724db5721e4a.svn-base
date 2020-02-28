@@ -1,0 +1,36 @@
+<?php
+
+class synctranssub extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+        
+        if (!empty($this->compcode) && !empty($this->agentcode)){
+            
+            $codeobj = json_decode($this->codes);
+           
+            $codeobj = implode("','", $codeobj);
+            
+            $stmtcheck  = $this->sql->Execute("SELECT SUB_CODE FROM  area_transaction_submitted WHERE SUB_STATUS='1' AND SUB_COMPCODE = ".$this->sql->Param('2')." AND SUB_AGENT_CODE = ".$this->sql->Param('3')." AND SUB_CODE IN ('".$codeobj."') ",array($this->compcode,$this->agentcode));
+            $obj_array = array();
+           
+                while($obj = $stmtcheck->FetchNextObject()){
+                $obj_array[] = $obj->SUB_CODE;
+                }
+            
+            $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result'=>$obj_array),200);
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Empty data'),404);
+        }
+    }
+}
+

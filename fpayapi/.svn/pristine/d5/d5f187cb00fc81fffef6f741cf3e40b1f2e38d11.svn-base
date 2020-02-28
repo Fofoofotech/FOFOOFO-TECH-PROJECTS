@@ -1,0 +1,222 @@
+<?php 
+class getsqldb extends REST
+{
+    private  $file_path;
+    private  $connsqllite;
+    private  $table_list;
+    
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt,$connsqllite;
+        $this->sql=$sql;
+        $this->table_list = array();
+        $this->connsqllite =  &ADONewConnection('sqlite3');
+       
+    }
+    
+    public function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+       //GENERATE FILE NAME
+       
+        if(!empty($this->companycode)){
+            
+            $file_name = md5(microtime()).'.sql';
+            $this->file_path = SPATH_FLASHDB.$file_name;
+            $this->getSqliteConnect();
+             $this->createTables();
+             $state = $this->loadDataIntoSqlLite();
+            
+            if($state){
+                $this->response( array( 'data'=> '/media/flashdb/'.$file_name,'syncdate'=>$time,'msg'=>'success'),200);
+            }
+        }else{
+            $this->response(array('data'=>'error','result'=>array(),'msg'=>'No record found'),404);
+        }
+    }
+    
+    private function createTables(){
+        $tables = $this->getTables();
+        
+        if(count($tables) > 0){
+            $this->getSqliteConnect();
+            $getuniqetable = $this->getConstraint();
+
+            foreach($tables as $table_name){
+                $stmt=$this->sql->MetaColumns($table_name);
+                
+                $list_column = array();
+                //print $this->sql->ErrorMsg();
+                //$this->connsqllite->Execute("DROP TABLE IF EXISTS ".$table_name.";");
+                
+                $create_str = 'CREATE TABLE IF NOT EXISTS '.$table_name.' (';
+                foreach($stmt as $column_vals){
+                    $unique = '';
+                    if(in_array($column_vals->name, $getuniqetable)){
+                        $unique = 'UNIQUE';
+                    }
+                    
+                    $list_column[] = $column_vals->name;
+                    $create_str .= $column_vals->name. ' '.(($column_vals->type =='int')?'INTEGER': (( $column_vals->type =='varchar')? 'varchar('.$column_vals->max_length.')':'TEXT')).' '.(($column_vals->primary_key =='1')?'PRIMARY KEY':'').'  '.$unique.',';
+                }
+                $create_str = substr($create_str,0,-1);
+                $create_str .=');';
+                
+                $this->table_list[$table_name] = $list_column;
+                $this->connsqllite->Execute($create_str);
+                print $this->connsqllite->ErrorMsg();
+                
+        }
+        
+            if($this->sql->ErrorNo()== 0){
+                return true;
+            }
+        }
+        
+        return false;
+        
+    }
+    
+    private function loadDataIntoSqlLite(){
+        
+        $tables = $this->getTables();
+        
+        if(count($tables) > 0){
+            $comptable = $this->getConstraint();
+            foreach($tables as $table_name){
+                $while = "";
+                if($comptable[$table_name] !=""){
+                    
+                    $while = " WHERE $comptable[$table_name] = '".$this->companycode."'";
+                }
+                
+                $lsarray=$this->sql->GetAll("SELECT * FROM $table_name $while");
+              
+                print $this->sql->ErrorMsg();
+                exit;
+                $str = implode(",", $this->table_list[$table_name]);
+                $str = substr($str,0,-1);
+                $str_value = '';
+                
+                $i =1;
+                foreach ($this->table_list[$table_name] as $param){
+                    $str_value .= ''.$this->sql->Param($i).',';
+                    $i++;
+                }
+                $str_value = substr($str_value,0,-1);
+                
+                $lst = "REPLACE INTO $table_name VALUES ($str_value)";
+              
+                $rs = $this->connsqllite->Execute($lst,$lsarray);
+                
+               
+                //print $this->connsqllite->ErrorMsg();
+                
+              
+                
+            }
+        }
+        
+        return true;
+    }
+    
+    private function getSqliteConnect(){
+        
+        $this->connsqllite->bulkBind = true;
+        $db = $this->connsqllite->PConnect($this->file_path);
+        //print $db;
+        
+    }
+    
+    private function getCompanyCodeColumn(){
+        return array(
+            '' =>'',
+            '' =>'',
+            '' =>'',
+        );
+    }
+    
+    private function getConstraint(){
+        return array(
+            'area_agent_connect' => 'USR_FACICODE',
+            'area_clients' => 'CLNT_COMPCODE',
+            'area_agents' => 'AG_COMPID',
+            'area_agentzones' => 'AGZ_COMPID',
+            'area_bank' => '',
+            'area_break' => 'BRK_FACICODE',
+            'area_client_bill' => 'CLBIL_COMPID',
+            'area_client_discount' => 'CLT_DIS_COM_CODE',
+            'area_currency' => '',
+            'area_cycle' => 'CYCLE_COMPCODE',
+            'area_discounts' => 'DISC_COMPCODE',
+            'area_district' => '',
+            'area_facilities_payment' => 'PINS_FACICODE',
+            'area_facilities_usrlevel' => '',
+            'area_frequency' => 'FREQ_COMPCODE',
+            'area_payment_categories' => 'PC_COMPCODE',
+            'area_payment_methods' => 'PM_COMPCODE',
+            'area_payment_transaction' =>'TRANS_PAY_COMPCODE',
+            'area_region' => '',
+            'area_set_branch' => 'BRN_INSTCODE',
+            'area_transaction' => 'TRANS_COMPCODE',
+            //'area_wallet_trans_holder',
+            //'area_wallet_transaction',
+            //'area_wallets',
+            'area_zones' =>'ZON_COMPCODE',
+            'areab_client_category' => 'CLNTCAT_COMPCODE',
+            'areab_commissions' => 'COM_INSTCODE',
+            'areab_set_paymentcatgory' =>'',
+            'areab_set_paymentmethod' => '',
+            'areab_set_paymentscheme' => '',
+            'area_transaction_balance' => 'TRSBAL_COMP_CODE',
+            'area_client_taxs' => 'CLTAX_COMPCODE',
+            'area_tax_categories' => 'TXCAT_COMPCODE',
+            'area_taxs' => 'TAX_COMPCODE',
+            'area_payment_categories_details' => 'PCD_COMPCODE');
+        
+        
+    }
+    
+    private function getTables(){
+        return array(
+            'area_agent_connect',
+            'area_clients',
+            'area_agents',
+            'area_agentzones',
+            'area_bank',
+            'area_break',
+            'area_client_bill',
+            'area_client_discount',
+            'area_currency',
+            'area_cycle',
+            'area_discounts',
+            'area_district',
+            'area_facilities_payment',
+            'area_facilities_usrlevel',
+            'area_frequency',
+            'area_payment_categories',
+            'area_payment_methods',
+            'area_payment_transaction',
+            'area_region',
+            'area_set_branch',
+            'area_transaction',
+            //'area_wallet_trans_holder',
+            //'area_wallet_transaction',
+            //'area_wallets',
+            'area_zones',
+            'areab_client_category',
+            'areab_commissions',
+            'areab_set_paymentcatgory',
+            'areab_set_paymentmethod',
+            'areab_set_paymentscheme',
+            'area_transaction_balance',
+            'area_client_taxs',
+            'area_tax_categories',
+            'area_taxs',
+            'area_payment_categories_details');
+    }
+    
+}
+
+?>

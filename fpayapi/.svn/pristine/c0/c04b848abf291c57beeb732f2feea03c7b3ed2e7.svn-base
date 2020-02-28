@@ -1,0 +1,47 @@
+<?php
+
+class checkiftransactioncleared extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+        $gdate = date("Y-m-d");
+        
+        if (!empty($this->compcode) && !empty($this->agentcode)){
+            $stmt = $this->sql->Execute("SELECT FACI_BANK_RECIEVAL FROM  areab_allfacilities WHERE FACI_CODE = ".$this->sql->Param('1')." ",array($this->compcode));
+            $checkin = 1;
+            $check_set = $stmt->FetchNextObject()->FACI_BANK_RECIEVAL;
+            
+            if(!empty($check_set)){
+                $stmt  = $this->sql->Execute("SELECT SUM(TRANS_AMOUNT) as TAMOUNT FROM  area_transaction WHERE TRANS_DATE < ".$this->sql->Param('1')." AND  TRANS_COMPCODE = ".$this->sql->Param('2')." AND TRANS_AGENT_CODE = ".$this->sql->Param('3')." AND TRANS_STATUS IN ('1','0') AND TRANS_PMTMETHNAME='Cash' ",array($gdate,$this->compcode,$this->agentcode));
+                $amount = $stmt->FetchNextObject()->TAMOUNT;
+                if(!empty($amount)){
+                    //check if cleared
+                    $checkin = 0;
+                    $stmtcheck  = $this->sql->Execute("SELECT * FROM  area_transaction_submitted WHERE SUB_COMPCODE = ".$this->sql->Param('2')." AND SUB_AGENT_CODE = ".$this->sql->Param('3')."  ",array($this->compcode,$this->agentcode));
+                    if($stmtcheck->RecordCount() == 0){
+                        $checkin = 1;
+                    }
+                }
+                
+               
+                
+            }
+          
+            $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result' => $checkin),200);
+            
+        }else{
+            $this->response(array('data'=>'error','msg'=>'Empty data'),404);
+        }
+        
+    }
+}
+

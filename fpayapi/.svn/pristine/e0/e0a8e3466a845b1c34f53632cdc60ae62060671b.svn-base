@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 9/4/2018
+ * Time: 5:10 PM
+ */
+class getgabbage extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        if(!empty($this->clientcode)&&!empty($this->agentcode)){
+            $stmt = $sql->Execute($sql->Prepare("SELECT GAB_AGENTCODE,GAB_CLIENTCODE,GAB_COMPCODE,GAB_LATITUDE,GAB_LONGITUDE,GAB_ZONECODE,GAB_INPUTEDDATE FROM area_gabbage_collection WHERE GAB_STATUS = '1' AND GAB_COMPCODE = ".$sql->Param('a')." AND GAB_AGENTCODE = ".$sql->Param('b')." AND GAB_CLIENTCODE = ".$sql->Param('b')." ORDER BY GAB_INPUTEDDATE ASC LIMIT 20 OFFSET {$this->offset}"),array($this->companycode,$this->agentcode,$this->clientcode));
+            $data = array();
+
+            if($stmt == true){
+                if($stmt->recordCount() > 0){
+                    while($obj = $stmt->FetchNextObject()){
+                        $companycode = $obj->GAB_COMPCODE;
+                        $latitude = $obj->GAB_LATITUDE;
+                        $longitude = $obj->GAB_LONGITUDE;
+                        $zone = $obj->GAB_ZONECODE;
+                        $date = date('Y-m-d',strtotime($obj->GAB_INPUTEDDATE));
+
+                        $data[]=array('companycode'=>$companycode,'latitude'=>$latitude,'longitude'=>$longitude,'zone'=>$zone,'date'=>$date);
+                    }
+                    $this->response( array( 'data'=>true,'status'=>200,'result'=>$data),200);
+                }else{
+                    $this->response(array('data'=>true,'result'=>$data,'msg'=>'No record found'),404);
+                }
+            }else{
+                $this->response(array('data'=>false,'msg'=>$sql->ErrorMsg()),404);
+            }
+
+        }else{
+            $this->response(array('data'=>false,'msg'=>'Agent code and Client code can not be empty'),404);
+        }
+    }
+}

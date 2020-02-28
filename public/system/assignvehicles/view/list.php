@@ -1,0 +1,310 @@
+<?php $rs = $pgnate->paginate(); ?>
+
+              <div class="container-fluid">
+                <!-- Page-Title -->
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="page-title-box">
+                            <!-- <form class="float-right app-search">
+                                <input type="text" placeholder="Search..." class="form-control">
+                                <button type="submit"><i class="fa fa-search"></i></button>
+                            </form> -->
+                            <h4 class="page-title"> <i class="mdi mdi-jeepney"></i>ASSIGN DRIVER [ VEHICLE(S) ] </h4>
+                        </div>
+                    </div>
+                </div>
+                <!-- end page title end breadcrumb -->
+
+            </div>
+        </div>
+
+
+
+
+ <div class="wrapper">
+            <div class="container-fluid">
+
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-body">
+
+                          <p> <div class="mt-0 header-title m-b-30">VEHICLES</div></p>
+
+
+
+       <div class="input-group">
+                 <div class="col-sm-2 mo-mb-2">
+                        <div id="pager">
+                            <?php echo $pgnate->renderFirst('<span class="fa fa-angle-double-left"></span>');?>
+                            <?php echo $pgnate->renderPrev('','<span class="fa fa-arrow-circle-left"></span>');?>
+                            <input name="page" style="width:60px;" type="text" class="pagedisplay short" value="<?php echo $pgnate->renderNavNum();?>" readonly />
+                            <?php echo $pgnate->renderNext('<span class="fa fa-arrow-circle-right"></span>','<span class="fa fa-arrow-circle-right"></span>');?>
+                            <?php echo $pgnate->renderLast('<span class="fa fa-angle-double-right"></span>');?>
+                            <?php $pgnate->limitList($limit,"myform");?>
+                        </div>
+
+
+                    </div>
+
+
+
+                    <div class="col-sm-2 pagerdetails">
+                        <div style="font-size:12px; line-height:2.8em">
+                            <?php echo $pgnate->renderNavNum();?>of <?php echo $pgnate->max_pages; ?> pages
+                            <span class="separator">|</span>
+                            Total <?php  echo $pgnate->total_rows; ?> records
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-sm-3">
+                        <div class="input-group">
+                            <input type="text" tabindex="1"  class="form-control square-input" name="fdsearch" placeholder="Enter Name / Tag to Search"
+                            />
+                            <span class="input-group-btn">
+                                            <button type="submit" onclick="document.getElementById('view').value='';document.getElementById('viewpage').value='';document.myform.submit();" class="btn btn-default btn-gyn-search"> <i class="fa fa-search"></i> </button>
+                                        </span>
+
+                        </div>
+
+
+
+                    </div>
+
+
+                    <div class="col-sm-2">
+                        <div class="input-group">
+                            <button type="submit" onclick="document.getElementById('view').value='';
+                                    document.getElementById('viewpage').value='reset';document.myform.submit;" class="btn btn-success btn-square"> <i class="fa fa-refresh"></i> </button>
+                        </div>
+                    </div>
+
+                  <a href="index.php?pg=index" class="btn btn-dark pull-right" style="margin-left:15%;"><i class="fa fa-arrow-left"></i> Back </a>
+                                
+                </div>
+            <!-- </div> -->
+
+
+
+
+
+
+
+
+         
+         
+     
+          <p>
+
+            <?php
+
+            if (isset($msg)) {
+               $engine->msgBox($msg,$status);
+             } ?>
+         
+          <div class="col-lg-12" style="padding-top: 50px">
+
+             <div class="float-right" style="margin-left: 1100px;margin-bottom: 20px">
+      
+            <!-- <button type="submit" onclick="$('#target').val('add');$('#viewpage').val('');" class="btn btn-success waves-effect waves-light"><i class="fa fa-plus-circle"></i> Assign Vehicle </button> -->
+          </div>
+                  
+                       
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                        <th>#</th>
+                                            <th>DRIVER NAME</th>
+                                            <th>TAG</th>
+                                            <th>ARM</th>
+                                            <th>UNIT</th>
+                                            <th>DEPARTMENT</th>
+                                            <th>STATUS</th>
+                                            
+                                            <th>ACTIONS</th> 
+                                            
+                                           
+                                        </tr>
+                                    </thead>
+                                
+                                
+                                    <tbody>
+                                    <?php
+                                    if($pgnate->total_rows > 0){
+                                        $page = (empty($page))? 1:$page;
+                                        $num = (isset($page))? ($limit*($page-1))+1:1;
+                                        $n=1;
+                                        while(!$rs->EOF){
+                                            $obj = $rs->FetchNextObject();
+                                      ?>   
+                                      <tr>
+                                      <td><?php echo $n++; ?> </td>
+                                      <td><?php echo $obj->NAMERANKZ?></td>
+                                      <td><?php echo $obj->DR_TAG?></td>
+                                      <td><?php echo $obj->DR_ARM?></td>
+                                      <td><?php echo $obj->DR_UNITNAME?></td>
+                                      <td><?php echo $obj->DR_DEPARTMENTNAME?></td>
+                                       
+                                      
+                                      <td>
+                                      <?php 
+                                         $astats=$obj->DR_ASSIGN_STATUS;
+
+                                      if ($obj->DR_STATUS=='1'){ echo '<span class="badge badge-pill badge-primary">Active</span>';
+                                          }elseif($obj->DR_STATUS=='0'){
+                                                echo '<span class="badge badge-pill badge-danger">Inactive</span>'; 
+                                            }elseif($obj->DR_STATUS=='2'){
+                                                echo '<span class="badge badge-pill badge-success">Approved</span>'; 
+                                            }elseif($obj->DR_STATUS=='3'){
+                                                echo '<span class="badge badge-pill badge-warning">Rejected</span>'; 
+                                            }elseif($obj->DR_STATUS=='4'){
+                                                echo '<span class="badge badge-pill badge-danger">Deleted</span>'; 
+                                            }      
+                                        
+                                      ?>
+
+                                      </td>
+
+                             <td class="hidden-xs">
+
+                              <div class="btn-group m-b-10">
+                                        <button type="button" class="btn btn-info btn-sm">ACTIONS</button>
+                                        <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split btn-sm" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            <span class="sr-only">Toggle Dropdown</span>
+                                        </button>
+                                        <div class="dropdown-menu" x-placement="bottom-start" style="position: absolute; transform: translate3d(79px, 37px, 0px); top: 0px; left: 0px; will-change: transform;">
+                                            
+                                             <?php if($astats=='1'){?>
+                                            <button class="dropdown-item"  type="submit" onclick="$('#viewpage').val('assign');$('#target').val('add');$('#keys').val('<?php echo $obj->DR_CODE; ?>');"> <i class="fa fa-refresh"></i> <b>Assign</b></button>
+                                             <?php }?>
+                                              
+                                             <?php if($astats=='2'){?>
+
+                                            <button class="dropdown-item"  type="submit" onclick="$('#viewpage').val('edit');$('#target').val('edit');$('#keys').val('<?php echo $obj->DR_CODE; ?>');"> <i class="fa fa-pencil"></i> <b>Re-Assign</b></button>
+                                            <?php }?>
+                                          
+                                          
+                                        </div>
+                                    </div>
+                               
+
+                              </td>
+
+                                
+
+
+                                      </tr>   
+                                      
+                                     <?php   }
+                                    }else{
+                                        echo '<tr><td colspan="6" align="center">No records found</td></tr>';
+                                    }
+                                        ?>
+                                       
+                                                   
+                                    </tbody>
+                                </table>
+                          
+                             <!-- end of section -->
+                         
+                        </div>
+                     </p>
+
+
+                             </div> <!-- end of card body -->
+
+                       </div>
+                    </div>
+                </div>
+
+            </div> <!-- end container -->
+            
+        </div><!-- end wrapper -->
+                 
+
+<script type="text/javascript">
+ 
+
+        //Parameter
+       function deleteuser(keys) {
+            swal({
+                title: 'Are you sure to Delete this Driver?',
+                text: "You won't be able to revert this!",
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'No, cancel!',
+                confirmButtonClass: 'btn btn-success',
+                cancelButtonClass: 'btn btn-danger m-l-10',
+                buttonsStyling: false
+              }).then(function () {
+               
+                swal(
+
+                    'Deleted!',
+                    'Driver has been deleted.',
+                    'success'
+                ),
+                        $('#keys').val(keys);
+                        // $('#ekeys').val(ekeys);
+                        $('#viewpage').val('delete');
+                        $('#myform').submit();
+                
+
+            }, function (dismiss) {
+                // dismiss can be 'cancel', 'overlay',
+                // 'close', and 'timer'
+                if (dismiss === 'cancel') {
+                    swal(
+                        'Cancelled',
+                        'Your imaginary data is safe :)',
+                        'error'
+                    )
+                }
+            } )
+        };
+
+
+ //Warning Message
+ //    function deleteuser(keys) {
+
+ //            swal({
+ //                title: 'Are you sure?',
+ //                text: "You won't be able to revert this!",
+ //                type: 'warning',
+ //                showCancelButton: true,
+ //                confirmButtonClass: 'btn btn-success',
+ //                cancelButtonClass: 'btn btn-danger m-l-10',
+ //                confirmButtonText: 'Yes, delete it!'
+ //            }).then(function () {
+ //                 $('#keys').val(keys);
+ //                         $('#ekeys').val(ekeys);
+ //                         $('#viewpage').val('delete');
+ //                         $('#myform').submit();
+ //            })
+ //          };
+
+
+
+// function deleteuser(keys,ekeys) {
+
+//   // alert('woooooo');
+//     swal({
+//     title: "Warning",
+//     text: "Are you sure you want to delete this User?",
+//     type: "warning",
+//     showCancelButton: true,
+//     confirmButtonColor: '#d9534f',
+//     confirmButtonText: "Yes, Delete!",
+//     closeOnConfirm: false
+//   }, if(res){function(){
+//     $('#keys').val(keys);
+//     $('#ekeys').val(ekeys);
+//     $('#viewpage').val('delete');
+//     $('#myform').submit()
+//   }});
+// }
+
+</script> 

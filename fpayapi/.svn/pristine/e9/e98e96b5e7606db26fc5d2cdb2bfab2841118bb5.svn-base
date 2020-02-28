@@ -1,0 +1,138 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/31/2018
+ * Time: 11:34 AM
+ */
+
+class synchronizetransaction extends REST
+{
+   
+    public function __construct(){
+        parent :: __construct();
+        global $sql;
+        $this->sql=$sql;
+    }
+
+    function Init(){  
+      //var_dump(  $this->data);die;
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $smartsms = new SmartSMSClass();
+        $time = date('Y-m-d H:i:s');
+
+        if (!empty($this->data)){
+            $data = json_decode($this->data);
+            $fulldata = array();
+            $allreceipno = array();
+            $detailsin = serialize($this->data);
+            $serialize = serialize(array_keys($_REQUEST));
+            $senderid = $engine->getFacilityDetails($this->companycode)->FACI_SMS_KEYWORD;
+            $companyname = $engine->getFacilityDetails($this->companycode)->FACI_NAME;
+
+            $sql->Execute("INSERT INTO area_api_monitor(API_AREA,API_DETAILS,API_RAW) VALUES(".$sql->Param('1').",".$sql->Param('2').",".$sql->Param('3').")",array('transactions_syn',$detailsin,$serialize));
+            
+            
+            foreach ($data as $transaction){
+                //$rshortcode = $engine->getRcode();
+                $shortcode = uniqid();
+                //$transaction->TRANS_CLIENT_NUM;
+               //GET THE LAST TRANSACTION
+                $stmt =  $sql->Execute("SELECT * FROM area_transaction WHERE TRANS_CLIENT_NUM = " . $sql->Param('a')."",array($transaction->TRANS_CLIENT_NUM));
+                
+                $fulldata[] = array($transaction->TRANS_CODE,$transaction->TRANS_COMPCODE,$transaction->TRANS_AGENT_CODE,$transaction->TRANS_AMOUNT,$transaction->TRANS_TYPE,$transaction->TRANS_DATE,$transaction->TRANS_TOKEN,$transaction->TRANS_MONTH,$transaction->TRANS_YEAR,$transaction->TRANS_BRANCH_CODE,$transaction->TRANS_CLIENT_CODE,$transaction->TRANS_DETAILS,$transaction->TRANS_CLIENT_NUM,$transaction->TRANS_CLIENT_NAME,$transaction->TRANS_AGENT_NAME,$transaction->TRANS_STATUS,$transaction->TRANS_RECALL_AMOUNT,$shortcode,$transaction->TRANS_PAYMENT_OPT,$transaction->TRANS_PHONENO,$transaction->TRANS_BANK_BRANCH,$transaction->TRANS_SYNC_DATE,$transaction->TRANS_APPROV_ACTOR,$transaction->TRANS_APROV_DATE,$transaction->TRANS_APPROV_ACTORCODE,$transaction->TRANS_GEOLONGITUDE,$transaction->TRANS_GEOLATITUDE,$transaction->TRANS_CLIENT_ZONE,$transaction->TRANS_RECEIPTNUM,$transaction->TRANS_PMTCATNAME,$transaction->TRANS_PMTCATCODE,$transaction->TRANS_PMTMETHCODE,$transaction->TRANS_PMTMETHNAME,$transaction->TRANS_EXPECTED_AMT,$transaction->TRANS_BALANCE_AMT,$transaction->TRANS_ZONENAME);
+                //$allreceipno[] = $transaction->TRANS_RECEIPTNUM;
+                $allreceipno[] = array($transaction->TRANS_RECEIPTNUM);
+
+            }
+           
+            $sql->Execute("INSERT INTO area_transaction(TRANS_CODE, TRANS_COMPCODE, TRANS_AGENT_CODE, TRANS_AMOUNT, TRANS_TYPE, TRANS_DATE, TRANS_TOKEN, TRANS_MONTH, TRANS_YEAR, TRANS_BRANCH_CODE, TRANS_CLIENT_CODE, TRANS_DETAILS, TRANS_CLIENT_NUM, TRANS_CLIENT_NAME, TRANS_AGENT_NAME, TRANS_STATUS, TRANS_RECALL_AMOUNT, TRANS_SHORTCODE, TRANS_PAYMENT_OPT, TRANS_PHONENO, TRANS_BANK_BRANCH, TRANS_SYNC_DATE, TRANS_APPROV_ACTOR, TRANS_APROV_DATE, TRANS_APPROV_ACTORCODE,TRANS_GEOLONGITUDE,TRANS_GEOLATITUDE,TRANS_CLIENT_ZONE,TRANS_RECEIPTNUM,TRANS_PMTCATNAME,TRANS_PMTCATCODE,TRANS_PMTMETHCODE,TRANS_PMTMETHNAME,TRANS_EXPECTED_AMT,TRANS_BALANCE_AMT,TRANS_ZONENAME) VALUES(".$sql->Param('1').",".$sql->Param('2').",".$sql->Param('3').",".$sql->Param('4').",".$sql->Param('5').",".$sql->Param('6').",".$sql->Param('7').",".$sql->Param('8').",".$sql->Param('9').",".$sql->Param('10').",".$sql->Param('11').",".$sql->Param('12').",".$sql->Param('13').",".$sql->Param('14').",".$sql->Param('15').",".$sql->Param('16').",".$sql->Param('17').",".$sql->Param('18').",".$sql->Param('19').",".$sql->Param('20').",".$sql->Param('21').",".$sql->Param('22').",".$sql->Param('22').",".$sql->Param('23').",".$sql->Param('24').",".$sql->Param('25').",".$sql->Param('26').",".$sql->Param('27').",".$sql->Param('28').",".$sql->Param('29').",".$sql->Param('30').",".$sql->Param('31').",".$sql->Param('32').",".$sql->Param('33').",".$sql->Param('34').",".$sql->Param('35').")",$fulldata);
+            
+            if(count($fulldata) > 0){
+                //SEND SMS NOTIFICATION WITH RECEIPT
+                //LOAD COMPANYS SMS KEYWORDS
+                $sms_keywords = $this->companiesSmsKeyWord();
+                $header_array = array('TRANS_CODE', 'TRANS_COMPCODE', 'TRANS_AGENT_CODE', 'TRANS_AMOUNT', 'TRANS_TYPE', 'TRANS_DATE', 'TRANS_TOKEN', 'TRANS_MONTH', 'TRANS_YEAR', 'TRANS_BRANCH_CODE', 'TRANS_CLIENT_CODE', 'TRANS_DETAILS', 'TRANS_CLIENT_NUM', 'TRANS_CLIENT_NAME', 'TRANS_AGENT_NAME', 'TRANS_STATUS', 'TRANS_RECALL_AMOUNT', 'TRANS_SHORTCODE', 'TRANS_PAYMENT_OPT', 'TRANS_PHONENO', 'TRANS_BANK_BRANCH', 'TRANS_SYNC_DATE', 'TRANS_APPROV_ACTOR','TRANS_APROV_DATE', 'TRANS_APPROV_ACTORCODE','TRANS_GEOLONGITUDE','TRANS_GEOLATITUDE','TRANS_CLIENT_ZONE','TRANS_RECEIPTNUM','TRANS_PMTCATNAME','TRANS_PMTCATCODE','TRANS_PMTMETHCODE','TRANS_PMTMETHNAME','TRANS_EXPECTED_AMT','TRANS_BALANCE_AMT','TRANS_ZONENAME');
+                foreach ($fulldata as $clietcode){
+                        //SEND SMS NOTIFICATION WITH RECEIPT
+                    try {
+                        $stmt = $sql->Execute($sql->Prepare("SELECT CLNT_CONTACT_PERSON,CLNT_NAME FROM area_clients WHERE CLNT_CODE = " . $sql->Param('a')), array($clietcode[10]));
+                        if ($stmt->RecordCount() > 0) {
+                            $obj = $stmt->FetchNextObj();
+                            $clientphonenumber = $obj->CLNT_CONTACT_PERSON;
+                            $clientname = $obj->CLNT_NAME;
+
+                            $message = $companyname."\nTag ID: ".$clietcode[12]."\nPaid: GHC".$clietcode[3]."\nDate: ".date('d/m/Y',strtotime($clietcode[5]))."\nCall care: 0302412243\nReceipt http://smartrcs.com/r/" . $clietcode[17];
+//                            $message = "Your payment of GHS {$clietcode[3]} to ".substr($companyname,0,8)."... was successful. Kindly click http://smartrcs.com/r/" . $clietcode[17] . " to view your receipt. Thank you.";
+//                            $message = "Dear customer, your payment was successful. Kindly click http://smartrcs.com/r/" . $shortcode . " to view your receipt. Thank you.";
+                            $messagecount = strlen($message);
+                            $messagecost = ceil($messagecount / 160);
+                            $smsbalance = $engine->getCompBal($clietcode[1]);
+                            $smssendingstatus = ($smsbalance > $messagecost) ? '1' : '0';
+                            $companycode = $clietcode[1];
+
+                            if (!empty($clientphonenumber)) {
+                                $validated = $engine->validateNumber($clientphonenumber);
+                                $msgcode = $engine->generateCode_bk('area_sms_message', '', 'MSG_CODE');
+                                $stmd = $sql->Execute($sql->Prepare("INSERT INTO area_sms_message(MSG_CODE,MSG_COMPCODE,MSG_MESSAGE,MSG_TYPE,MSG_STATUS,MSG_DATE) VALUES(" . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . ") "), array($msgcode, $companycode, $message, '1', $smssendingstatus, $time));
+
+                                if (!preg_match('/ERR/i', $validated)) {
+                                    $prefix2 = 'MSGD-' . date('dmy');
+                                    $msgDcod = $engine->generateCode_bk('area_sms_message_details', $prefix2, 'MSGD_CODE');
+                                    $stmt_clntcatcode = $sql->Execute($sql->Prepare("SELECT CLNT_CATEGORY_CODE,CLNT_NUM FROM area_clients WHERE CLNT_CODE = ".$sql->Param('a')),array($clietcode[10]));
+                                    if ($stmt_clntcatcode->RecordCount() > 0) {
+                                        $objclntcode = $stmt_clntcatcode->FetchNextObj();
+                                        $clientcatcode = $objclntcode->CLNT_CATEGORY_CODE;
+                                        $clienttag = $objclntcode->CLNT_NUM;
+                                    }
+                                    $std = $sql->Execute($sql->Prepare("INSERT INTO area_sms_message_details(MSGD_CODE,MSGD_MSGCODE,MSGD_COMPCODE,MSGD_CLTAGNAME,MSGD_PHONENUMBER,MSGD_TYPE,MSGD_STATUS,MSGD_DATE,MSGD_TOTMSG,MSGD_CLTZONECODE,MSGD_CLTBRANCHCODE,MSGD_CLTCATCODE,MSGD_AGNCODE,MSGD_CLNTTAG) VALUES(" . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . "," . $sql->Param('a') . ") "), array($msgDcod, $msgcode, $companycode, $clientname, $validated, '0', $smssendingstatus, $time, '1',$clietcode[27],$clietcode[9],$clientcatcode,$clietcode[2],$clienttag));
+
+                                    if ($smsbalance > $messagecost) {
+                                        //  Send SMS if sms balance if more than sms cost
+                                        $sendmy = $smartsms->sendSMSNEW($senderid, $validated, $message);
+
+                                        if (preg_match('/Success/i', $sendmy) == true) {
+                                            //  Deduct sms cost from sms balance if sms is sent
+                                            $engine->getSMSDeduction($companycode, $messagecost);
+                                        }
+                                    }
+
+                                }
+                            }
+
+                        }
+                    }catch (Exception $e){}
+
+                     $c = array_combine($header_array, $clietcode);
+                    $eventype = '059';
+                    $activity = 'Upload Synchronization: '.serialize($c);
+                    $engine->setEventLog($eventype, $clietcode[2], '', $activity);
+                    }
+                
+               }
+            
+               $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result'=>$allreceipno),200);
+        }else{
+            $this->response(array('data'=>'error','msg'=>$this->sql->ErrorMsg()),404);
+        }
+
+    }
+    
+    /**
+     * This function return an array containing key pair values for company code and sms keyword
+     * @return array
+     */
+    public function companiesSmsKeyWord(){
+        $compcode_smskeypair = array();
+        $stmt = $this->sql->Execute("SELECT FACI_CODE,FACI_SMS_KEYWORD,FACI_COUNTRY FROM areab_allfacilities WHERE FACI_STATUS ='1' AND FACI_SMS_KEYWORD IS NOT NULL");
+        
+        while($obj = $stmt->FetchNextObject()){
+            $compcode_smskeypair[$obj->FACI_CODE] = array($obj->FACI_SMS_KEYWORD,$obj->FACI_COUNTRY);
+        }
+        return $compcode_smskeypair;
+    }//end of companiesSmsKeyWord
+
+    
+}

@@ -1,0 +1,48 @@
+<?php
+
+
+class sendchequeclearancedate extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+    
+    function Init(){
+        $engine=new engineClass();
+        $client=new clientClass();
+        $sql=$this->sql;
+        $time = date('Y-m-d H:i:s');
+        
+        if (isset($this->chequecode) && !empty($this->comp_code) && !empty($this->date) && !empty($this->agent_code)){
+            $amount = 0;
+            $stmtcheck  = $this->sql->Execute("SELECT * FROM  area_transaction_submitted WHERE SUB_TRANS_DATE = ".$this->sql->Param('1')." AND  SUB_COMPCODE = ".$this->sql->Param('2')." AND SUB_AGENT_CODE = ".$this->sql->Param('3')."  ",array($this->date,$this->comp_code,$this->agent_code));
+            
+            if($stmtcheck->RecordCount() == 0){
+            $stmt  = $this->sql->Execute("SELECT SUM(TRANS_AMOUNT) as TAMOUNT FROM  area_transaction WHERE TRANS_DATE = ".$this->sql->Param('1')." AND  TRANS_COMPCODE = ".$this->sql->Param('2')." AND TRANS_AGENT_CODE = ".$this->sql->Param('3')." AND TRANS_STATUS IN ('1','5','0') ",array($this->date,$this->comp_code,$this->agent_code));
+            $amount = $stmt->FetchNextObject()->TAMOUNT;
+                        if(empty($amount)){
+                            $amount = 0;
+                                    }
+                                    
+            $allreceipno = array("CODE"=>$this->chequecode,"COMPCODE"=>$this->comp_code, "TDATE"=>$this->date, "AGENTCODE"=>$this->agent_code,"AMOUNT"=>$amount);
+           
+            //STORE LOG
+            $eventype = '065';
+            $activity = 'Daily Transaction Request: Transaction => '.serialize($allreceipno);
+            
+            
+           
+            $engine->setEventLog($eventype,$this->agent_code, '', $activity,$this->comp_code);
+            
+            $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success','result'=>$allreceipno),200);
+            }else{
+                $this->response(array('data'=>'error','msg'=>'Transaction already exist'),404);
+            }
+            }else{
+            $this->response(array('data'=>'error','msg'=>'Empty data'),404);
+        }
+    }
+}
+

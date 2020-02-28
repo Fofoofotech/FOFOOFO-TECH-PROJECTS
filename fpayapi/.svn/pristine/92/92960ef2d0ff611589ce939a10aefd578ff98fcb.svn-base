@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * Created by PhpStorm.
+ * User: S3L0RM
+ * Date: 8/28/2018
+ * Time: 12:33 PM
+ */
+class synchronizeclient extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+        $sql=$this->sql;
+        $api = $engine->generateAPIKey();
+        $client=new clientClass();
+        $time = date('Y-m-d H:i:s');
+
+        $data = $this->data;
+        if (!empty($data) && is_array($data)){
+            foreach ($data as $clientupdate){
+                $stmt = $sql->Execute($sql->Prepare("SELECT * FROM area_clients WHERE CLNT_ID = ".$sql->Param('a')." AND CLNT_CODE = ".$sql->Param('b')),array($clientupdate->CLNT_ID,$clientupdate->CLNT_CODE));
+                if ($stmt->RecordCount() > 0){
+                    if (!empty($clientupdate->CLNT_IMAGE)) {
+                        $picturename = '';
+                        if (strpos($clientupdate->CLNT_IMAGE,',') != false) {
+                            $clientimage = explode(',', $clientupdate->CLNT_IMAGE);
+                            $picturename = $client->generateNameforClientPhoto(str_replace(' ', '', $clientupdate->CLNT_NAME));
+                            touch(SPATH_PHOTO . $picturename . '.jpg');
+                            $fp = fopen(SPATH_PHOTO . $picturename. '.jpg' , "wb");
+                            fwrite($fp, base64_decode($clientimage[1]));
+                            fclose($fp);
+                        } else {
+                            $picturename = $clientupdate->CLNT_IMAGE;
+                        }
+                    }else{
+                        $picturename = '';
+                    }
+                    $stmt=$sql->Execute($sql->Prepare("UPDATE area_clients SET CLNT_NAME=".$sql->Param('a').",CLNT_CONTACT_PERSON=".$sql->Param('b').",CLNT_RSADDRESS=".$sql->Param('b').",CLNT_GHPOSTGPS=".$sql->Param('b').",CLNT_POSTAL=".$sql->Param('b').",CLNT_IMAGE=".$sql->Param('b').",CLNT_CATEGORY_CODE=".$sql->Param('b').",CLNT_CATEGORY=".$sql->Param('b').",CLNT_REGFEE=".$sql->Param('b').",CLNT_LAST_PAID = ".$sql->Param('c')." WHERE CLNT_ID = ".$sql->Param('f')." AND CLNT_CODE=".$sql->Param('c')." "),array($clientupdate->CLNT_NAME,$clientupdate->CLNT_CONTACT_PERSON,$clientupdate->CLNT_RSADDRESS,$clientupdate->CLNT_GHPOSTGPS,$clientupdate->CLNT_POSTAL,$picturename,$clientupdate->CLNT_CATEGORY_CODE,$clientupdate->CLNT_CATEGORY,$clientupdate->CLNT_REGFEE,$clientupdate->CLNT_LAST_PAID,$clientupdate->CLNT_ID,$clientupdate->CLNT_CODE));
+                    if ($stmt){
+                        $eventype = '013';
+                        $activity = 'Synchronization: Agent with code ' . $this->agentcode.' has updated client with code '.$clientupdate->CLNT_CODE.'\'s records.';
+                        $engine->setEventLog($eventype, $this->agentcode, '', $activity);
+                    }
+
+                }
+            }
+            $this->response( array( 'data'=>'true','syncdate'=>$time,'msg'=>'success'),200);
+        }else{
+            $this->response(array('data'=>'false','msg'=>'The data array can not be empty.'),404);
+        }
+
+    }
+
+}

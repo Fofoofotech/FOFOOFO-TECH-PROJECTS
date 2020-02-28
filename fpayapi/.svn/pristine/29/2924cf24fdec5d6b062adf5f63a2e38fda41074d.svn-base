@@ -1,0 +1,45 @@
+<?php
+/**
+ * This class fetches the client categories for the agent
+ * @author S3LORM
+ */
+class clientcategory extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+		$sql=$this->sql;
+        $api = $engine->generateAPIKey();
+
+
+        $stmt = $sql->Execute($sql->Prepare("SELECT CLNTCAT_CODE,CLNTCAT_COMPCODE,CLNTCAT_DESCRIPTION,CLNTCAT_NAME,CLNTCAT_STATUS FROM areab_client_category WHERE CLNTCAT_COMPCODE = ".$sql->Param('a')." AND CLNTCAT_STATUS = '1' ORDER BY CLNTCAT_INPUTEDDATE DESC "),array($this->companycode));
+                $response = array();
+                if($stmt == true){
+					  if($stmt->recordCount() > 0){
+					  while($data = $stmt->FetchNextObject()){
+                      $categorycode = $data->CLNTCAT_CODE;
+                      $categoryname = $data->CLNTCAT_NAME;
+					  $categorydescription = $data->CLNTCAT_DESCRIPTION;
+
+                       $response[]=array('categorycode'=>$categorycode,'categoryname'=>$categoryname,'categorydescription'=>$categorydescription);
+					  }
+
+					  $this->response( array( 'data'=>'success','response'=>$response),200);
+
+					   }else{
+					      $this->response( array('data'=>'error','msg'=>'No Record found'),204 );
+                      }
+
+                }else{
+                    $this->response(array('data'=>'error','msg'=>$sql->ErrorMsg()),404);
+                }
+    }
+
+}
+?>

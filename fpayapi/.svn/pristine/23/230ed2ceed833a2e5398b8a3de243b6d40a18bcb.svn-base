@@ -1,0 +1,150 @@
+<?php
+/**
+ * This class save transaction for client through the agent app
+ * @author S3LORM
+ */
+class transaction extends REST
+{
+    public function __construct(){
+        parent :: __construct();
+        global $sql,$saltencrypt;
+        $this->sql=$sql;
+    }
+
+
+    function Init(){
+        $engine=new engineClass();
+		$sql=$this->sql;
+        $smartsms = new SmartSMSClass();
+        $thisdate = date('Y-m-d H:i:s');
+        $senderid = $engine->getFacilityDetails($this->companycode)->FACI_SMS_KEYWORD;
+
+        if(!empty($this->amount) && !empty($this->clientcode) ){
+            //Check for the last time client made payment or Check for last client transaction
+            $stmt = $sql->Execute($sql->Prepare("SELECT CLBIL_CLTCODE,CLBIL_AGCODE,CLBIL_AMOUNT,CLBIL_BRANCHCODE,CLBIL_MONTH,CLBIL_YEAR FROM area_client_bill WHERE CLBIL_CLTCODE = ".$sql->Param('a')." ORDER BY CLBIL_ID DESC LIMIT 1"),array($this->clientcode));
+            if ($stmt->RecordCount() > 0){
+                //If client has ever made transaction, then get the last month and year the transaction was made
+                $obj = $stmt->FetchNextObject();
+                $month = $obj->CLBIL_MONTH;
+                $year = $obj->CLBIL_YEAR;
+                if ($month > 12){
+                    //If the last month client made payment was december(12) of any year, then set month to january(01) and year to the next year. ie. if year was 2018, then year now becomes 2019
+                    $month = 01;
+                    $year =+ 1;
+                }
+                if ($this->amount < $this->clientamount){
+                    //If amount entered by agent is less than the amount the client is suppose to pay, then prompt the agent
+                    $this->response(array('data'=>'error','msg'=>'The amount entered is less than the actual amount the client is supposed to pay for this month.'),404);
+                }else{
+                    //Record the transaction or payment of the client
+                    $rshortcode = $engine->getRcode();
+                    $trasactioncode = $engine->generateCode_bk('area_transaction','TRANS','TRANS_CODE');
+                    $stmt_transaction = $sql->Execute("INSERT INTO area_transaction(TRANS_CODE, TRANS_COMPCODE, TRANS_AGENT_CODE, TRANS_AGENT_NAME, TRANS_CLIENT_NAME, TRANS_CLIENT_NUM, TRANS_AMOUNT, TRANS_TYPE, TRANS_DATE, TRANS_TOKEN, TRANS_MONTH, TRANS_YEAR, TRANS_BRANCH_CODE, TRANS_CLIENT_CODE,TRANS_RECEIPTNUM,TRANS_SHORTCODE, TRANS_STATUS, TRANS_BANK_BRANCH) VALUES(".$sql->Param('1').",".$sql->Param('2').",".$sql->Param('3').",".$sql->Param('4').",".$sql->Param('5').",".$sql->Param('6').",".$sql->Param('7').",".$sql->Param('8').",".$sql->Param('9').",".$sql->Param('10').",".$sql->Param('11').",".$sql->Param('12').",".$sql->Param('13').",".$sql->Param('14').",".$sql->Param('15').",".$sql->Param('16').",".$sql->Param('17').",".$sql->Param('18').")",array($trasactioncode,$this->companycode,$this->agentid,$this->agentname,$this->clientname,$this->clientnumber,$this->amountpaid,$this->paymenttype,$thisdate,$this->txtoken,$this->txmonth,$this->txyear,$this->branchcode,$this->clientid,$this->recieptnumber,$rshortcode,'0','none'));
+
+                    if ($this->amount > $this->clientamount){
+                        //if the amount the client paid is greater than the amount he/she is supposed to pay, then record the actual the client is meant to pay in the bill table and keep the balance in the balance table
+                        $balance = ($this->amount - $this->clientamount);
+                        $divide = $this->amount / $this->clientamount;
+                        for ($i = 0; $i < intval($divide); $i++){
+                            if ($month > 12){
+                                //If the last month client made payment was december(12) of any year, then set month to january(01) and year to the next year. ie. if year was 2018, then year now becomes 2019
+                                $month = 01;
+                                $year =+ 1;
+                            }
+                            $clientbillcode = $engine->generateCode_bk('area_client_bill','CLBIL','CLBIL_CODE');
+                            $stmt_billing = $sql->Execute($sql->Prepare("INSERT INTO area_client_bill (CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT, CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_TXCODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').")"),array($clientbillcode, $this->companycode, $this->agentid, $month, $year, $this->billamount, $thisdate, $this->clientid, $this->clientzone, $this->branchcode, $trasactioncode));
+                            if ($stmt_billing){
+                                $month += 1;
+                            }
+                        }
+
+                        $trasactionbalancecode = $engine->generateCode_bk('area_transaction_balance','TRSBAL','TRSBAL_CODE');
+                        $stmt_balance = $sql->Execute($sql->Prepare("INSERT INTO area_transaction_balance (TRSBAL_CODE, TRSBAL_AMOUNT, TRSBAL_DATE, TRSBAL_CLIENTCODE, TRSBAL_AG_CODE, TRSBAL_BRANCHCODE, TRSBAL_COMP_CODE, TRSBAL_TXCODE, TRSBAL_CLIENTNUM) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').")"),array($trasactionbalancecode, $balance, $thisdate, $this->clientid, $this->agentid, $this->branchcode, $this->companycode, $trasactioncode, $this->clientnumber));
+                    }else{
+                        //Amount entered is equal to client amount to be paid monthly
+                        $clientbillcode = $engine->generateCode_bk('area_client_bill','CLBIL','CLBIL_CODE');
+                        $stmt_billing = $sql->Execute($sql->Prepare("INSERT INTO area_client_bill (CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT, CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_TXCODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').")"),array($clientbillcode, $this->companycode, $this->agentid, $month, $year, $this->billamount, $thisdate, $this->clientid, $this->clientzone, $this->branchcode, $trasactioncode));
+                    }
+                }
+            }else{
+                $month = date('m');
+                $year = date('Y');
+                if ($this->amount < $this->clientamount){
+                    //If amount entered by agent is less than the amount the client is suppose to pay, then prompt the agent
+                    $this->response(array('data'=>'error','msg'=>'The amount entered is less than the actual amount the client is supposed to pay for this month.'),404);
+                }else{
+                    //Record the transaction or payment of the client
+                    $rshortcode = $engine->getRcode();
+                    $trasactioncode = $engine->generateCode_bk('area_transaction','TRANS','TRANS_CODE');
+                    $stmt_transaction = $sql->Execute("INSERT INTO area_transaction(TRANS_CODE, TRANS_COMPCODE, TRANS_AGENT_CODE, TRANS_AGENT_NAME, TRANS_CLIENT_NAME, TRANS_CLIENT_NUM, TRANS_AMOUNT, TRANS_TYPE, TRANS_DATE, TRANS_TOKEN, TRANS_MONTH, TRANS_YEAR, TRANS_BRANCH_CODE, TRANS_CLIENT_CODE,TRANS_RECEIPTNUM,TRANS_SHORTCODE, TRANS_STATUS, TRANS_BANK_BRANCH) VALUES(".$sql->Param('1').",".$sql->Param('2').",".$sql->Param('3').",".$sql->Param('4').",".$sql->Param('5').",".$sql->Param('6').",".$sql->Param('7').",".$sql->Param('8').",".$sql->Param('9').",".$sql->Param('10').",".$sql->Param('11').",".$sql->Param('12').",".$sql->Param('13').",".$sql->Param('14').",".$sql->Param('15').",".$sql->Param('16').",".$sql->Param('17').",".$sql->Param('18').")",array($trasactioncode,$this->companycode,$this->agentid,$this->agentname,$this->clientname,$this->clientnumber,$this->amountpaid,$this->paymenttype,$thisdate,$this->txtoken,$this->txmonth,$this->txyear,$this->branchcode,$this->clientid,$this->recieptnumber,$rshortcode,'0','none'));
+
+
+                    if ($this->amount > $this->clientamount){
+                        //if the amount the client paid is greater than the amount he/she is supposed to pay, then record the actual the client is meant to pay in the bill table and keep the balance in the balance table
+                        $balance = ($this->amount - $this->clientamount);
+                        $clientbillcode = $engine->generateCode_bk('area_client_bill','CLBIL','CLBIL_CODE');
+                        $stmt_billing = $sql->Execute($sql->Prepare("INSERT INTO area_client_bill (CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT, CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_TXCODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').")"),array($clientbillcode, $this->companycode, $this->agentid, $month, $year, $this->billamount, $thisdate, $this->clientid, $this->clientzone, $this->branchcode, $trasactioncode));
+
+                        $trasactionbalancecode = $engine->generateCode_bk('area_transaction_balance','TRSBAL','TRSBAL_CODE');
+                        $stmt_balance = $sql->Execute($sql->Prepare("INSERT INTO area_transaction_balance (TRSBAL_CODE, TRSBAL_AMOUNT, TRSBAL_DATE, TRSBAL_CLIENTCODE, TRSBAL_AG_CODE, TRSBAL_BRANCHCODE, TRSBAL_COMP_CODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').")"),array($trasactionbalancecode, $balance, $thisdate, $this->clientcode, $this->agentcode, $this->branchcode, $this->companycode));
+                    }else{
+                        //Amount entered is equal to client amount to be paid monthly
+                        $clientbillcode = $engine->generateCode_bk('area_client_bill','CLBIL','CLBIL_CODE');
+                        $stmt_billing = $sql->Execute($sql->Prepare("INSERT INTO area_client_bill (CLBIL_CODE, CLBIL_COMPID, CLBIL_AGCODE, CLBIL_MONTH, CLBIL_YEAR, CLBIL_AMOUNT, CLBIL_DATE, CLBIL_CLTCODE, CLBIL_ZONE_CODE, CLBIL_BRANCHCODE, CLBIL_TXCODE) VALUES (".$sql->Param('1').", ".$sql->Param('2').", ".$sql->Param('3').", ".$sql->Param('4').", ".$sql->Param('5').", ".$sql->Param('6').", ".$sql->Param('7').", ".$sql->Param('8').", ".$sql->Param('9').", ".$sql->Param('10').", ".$sql->Param('11').")"),array($clientbillcode, $this->companycode, $this->agentid, $month, $year, $this->billamount, $thisdate, $this->clientid, $this->clientzone, $this->branchcode, $trasactioncode));
+                    }
+                }
+            }
+
+                if($stmt_transaction && $stmt_billing){
+                    //SEND SMS NOTIFICATION WITH RECEIPT
+                    $stmt = $sql->Execute($sql->Prepare("SELECT CLNT_CONTACT_PERSON,CLNT_NAME FROM area_clients WHERE CLNT_CODE = ".$sql->Param('a')),array($this->clientcode));
+                    if($stmt->RecordCount() > 0){
+                        $obj = $stmt->FetchNextObj();
+                        $clientphonenumber = $obj->CLNT_CONTACT_PERSON;
+                        $clientname = $obj->CLNT_NAME;
+                        $message = "Dear customer, your payment was successfully. Kindly click http://smartrcs.com/r/".$rshortcode." to view your receipt. Thank you.";
+                        $messagecount = strlen($message);
+                        $messagecost = ceil($messagecount / 160);
+                        $smsbalance = $engine->getCompBal($this->companycode);
+                        $smssendingstatus = ($smsbalance > $messagecost) ? '1' : '0';
+
+                        if(!empty($clientphonenumber)){
+                            $validated = $engine->validateNumber($clientphonenumber);
+                            $msgcode = $engine->generateCode_bk('area_sms_message', '', 'MSG_CODE');
+                            $stmd=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message(MSG_CODE,MSG_COMPCODE,MSG_MESSAGE,MSG_TYPE,MSG_STATUS,MSG_DATE) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgcode,$this->companycode,$message,'1',$smssendingstatus,$thisdate));
+
+                            if(!preg_match('/ERR/i', $validated)){
+                                $prefix2='MSGD-'.date('dmy');
+                                $msgDcod=$engine->generateCode_bk('area_sms_message_details', $prefix2, 'MSGD_CODE');
+                                $std=$sql->Execute($sql->Prepare("INSERT INTO area_sms_message_details(MSGD_CODE,MSGD_MSGCODE,MSGD_COMPCODE,MSGD_CLTAGNAME,MSGD_PHONENUMBER,MSGD_TYPE,MSGD_STATUS,MSGD_DATE,MSGD_TOTMSG) VALUES(".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').",".$sql->Param('a').") "),array($msgDcod,$msgcode,$this->companycode,$clientname,$validated,'0',$smssendingstatus,$thisdate,'1'));
+
+                                if ($smsbalance  > $messagecost) {
+                                    //  Send SMS if sms balance if more than sms cost
+                                    $sendmy=$smartsms->sendSMSNEW($senderid,$validated,$message);
+
+                                    if(preg_match('/Success/i',$sendmy) == true){
+                                        //  Deduct sms cost from sms balance if sms is sent
+                                        $engine->getSMSDeduction($this->companycode,$messagecost);
+                                    }
+                                }
+
+                            }
+                        }
+
+                    }
+
+                    $this->response( array('data'=>'true','num'=>$engine->getCompBal($this->companycode)),200);
+                    $eventype = '044';
+                    $activity = "New Transaction: Payment for {$this->transactionmonth},{$this->transactionyear} successfully made with an of amount GHS{$this->amount}. Collection Agent: {$this->agentname} Method of Payment: Cash";
+                    $engine->setEventLog($eventype,$this->agentcode,$this->agentname,$activity);
+
+                }else{
+                    $this->response($sql->ErrorMsg(),404);
+                }
+            }else{
+                $this->response(array('data'=>'error','msg'=>'Client code and Amount can not be empty'),404);
+            }
+    }
+
+}
+?>
